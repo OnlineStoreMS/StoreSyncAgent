@@ -223,7 +223,7 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 	case "exchange":
 		return item.AfterSaleType == 3 && ActiveExchangeStatus(item.AfterSaleStatus)
 	case "wait_send_exchange":
-		return item.AfterSaleType == 3 && item.AfterSaleStatus == "WAIT_SEND_EXCHANGE_ITEM"
+		return item.AfterSaleStatus == "WAIT_SEND_EXCHANGE_ITEM"
 	case "return_signed":
 		if item.AfterSaleStatus != "WAIT_SELLER_CONFIRM_RECEIVE" {
 			return false

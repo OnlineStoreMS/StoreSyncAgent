@@ -694,7 +694,7 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 	case "wait_send_exchange":
 		q := base
 		q.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
-		q.AfterSaleTypeList = []int{3}
+		q.AfterSaleTypeList = nil
 		items, _, err := s.session.QueryAllRefunds(ctx, q)
 		if err != nil {
 			return nil, err
@@ -825,7 +825,6 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 		}
 		if q.Scenario == "wait_send_exchange" {
 			rq.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
-			rq.AfterSaleTypeList = []int{3}
 		}
 	}
 	return rq
@@ -875,7 +874,6 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 
 	sendExQ := base
 	sendExQ.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
-	sendExQ.AfterSaleTypeList = []int{3}
 	if res, err := s.session.QueryRefunds(ctx, sendExQ); err == nil {
 		stats.WaitSendExchange = res.Total
 	}

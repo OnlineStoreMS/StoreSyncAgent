@@ -84,14 +84,14 @@ const urgencyType = (urgency?: string) => {
 }
 
 const statCards = computed(() => [
-  { label: '待确认收货', value: refundStats.value?.waitSellerConfirmReceive, color: '#409eff' },
-  { label: '待卖家同意', value: refundStats.value?.waitSellerAgree, color: '#e6a23c' },
-  { label: '仅退款待处理', value: refundStats.value?.refundOnlyPending, color: '#f56c6c' },
-  { label: '换货待处理', value: refundStats.value?.exchangePending, color: '#b88230' },
-  { label: '待发出换货商品', value: refundStats.value?.waitSendExchange, color: '#9c6ade' },
-  { label: '退回已签收', value: refundStats.value?.returnSigned, color: '#67c23a' },
-  { label: '驿站待取件', value: refundStats.value?.pickupPending, color: '#909399' },
-  { label: '时效紧迫', value: refundStats.value?.urgent, color: '#f56c6c', highlight: true },
+  { label: '待确认收货', value: refundStats.value?.waitSellerConfirmReceive, color: '#409eff', scenario: 'confirm_receive' },
+  { label: '待卖家同意', value: refundStats.value?.waitSellerAgree, color: '#e6a23c', scenario: 'wait_agree' },
+  { label: '仅退款待处理', value: refundStats.value?.refundOnlyPending, color: '#f56c6c', scenario: 'refund_only' },
+  { label: '换货待处理', value: refundStats.value?.exchangePending, color: '#b88230', scenario: 'exchange' },
+  { label: '待发出换货商品', value: refundStats.value?.waitSendExchange, color: '#9c6ade', scenario: 'wait_send_exchange' },
+  { label: '退回已签收', value: refundStats.value?.returnSigned, color: '#67c23a', scenario: 'return_signed' },
+  { label: '驿站待取件', value: refundStats.value?.pickupPending, color: '#909399', scenario: 'pickup_pending' },
+  { label: '时效紧迫', value: refundStats.value?.urgent, color: '#f56c6c', highlight: true, scenario: 'urgent' },
 ])
 
 async function loadRefunds() {
@@ -123,8 +123,14 @@ async function loadRefunds() {
 
 function onScenarioChange(key: string) {
   filters.scenario = key
+  filters.afterSaleStatus = ''
+  filters.afterSaleType = ''
   filters.pageNo = 1
   loadRefunds()
+}
+
+function onStatCardClick(scenario: string) {
+  onScenarioChange(scenario)
 }
 
 function onFilterChange() {
@@ -188,7 +194,12 @@ onMounted(async () => {
           v-for="card in statCards"
           :key="card.label"
           class="stat-item"
-          :class="{ highlight: card.highlight && (card.value || 0) > 0 }"
+          :class="{
+            highlight: card.highlight && (card.value || 0) > 0,
+            active: filters.scenario === card.scenario,
+            clickable: true,
+          }"
+          @click="onStatCardClick(card.scenario)"
         >
           <div class="stat-label">{{ card.label }}</div>
           <div class="stat-value" :style="{ color: card.color }">{{ card.value ?? '—' }}</div>
@@ -403,6 +414,31 @@ onMounted(async () => {
   padding: 8px 12px;
   border-radius: 8px;
   background: #fafafa;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.stat-item.clickable {
+  cursor: pointer;
+}
+.stat-item.clickable:hover {
+  background: #f0f7ff;
+  border-color: #c6e2ff;
+}
+.stat-item.active {
+  background: #ecf5ff;
+  border-color: #409eff;
+  box-shadow: 0 0 0 1px #409eff inset;
+}
+.stat-item.active .stat-label {
+  color: #409eff;
+}
+.stat-item.highlight.active {
+  background: #fef0f0;
+  border-color: #f56c6c;
+  box-shadow: 0 0 0 1px #f56c6c inset;
+}
+.stat-item.highlight.active .stat-label {
+  color: #f56c6c;
 }
 .stat-item.highlight {
   background: #fef0f0;
