@@ -508,6 +508,7 @@ type RefundStatsView struct {
 	WaitSellerAgree          int `json:"waitSellerAgree"`
 	RefundOnlyPending        int `json:"refundOnlyPending"`
 	ExchangePending          int `json:"exchangePending"`
+	WaitSendExchange         int `json:"waitSendExchange"`
 	ReturnSigned             int `json:"returnSigned"`
 	PickupPending            int `json:"pickupPending"`
 	Urgent                   int `json:"urgent"`
@@ -689,6 +690,19 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 			filtered = append(filtered, items[i])
 		}
 		return filtered, nil
+
+	case "wait_send_exchange":
+		q := base
+		q.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
+		q.AfterSaleTypeList = []int{3}
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for i := range items {
+			items[i].SLA = kdzs.ComputeRefundSLA(&items[i], nil, now)
+		}
+		return items, nil
 	}
 
 	var matched []kdzs.RefundItem
@@ -809,6 +823,10 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 		if q.Scenario == "exchange" {
 			rq.AfterSaleTypeList = []int{3}
 		}
+		if q.Scenario == "wait_send_exchange" {
+			rq.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
+			rq.AfterSaleTypeList = []int{3}
+		}
 	}
 	return rq
 }
@@ -853,6 +871,13 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 				stats.ExchangePending++
 			}
 		}
+	}
+
+	sendExQ := base
+	sendExQ.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
+	sendExQ.AfterSaleTypeList = []int{3}
+	if res, err := s.session.QueryRefunds(ctx, sendExQ); err == nil {
+		stats.WaitSendExchange = res.Total
 	}
 
 	// 待确认收货：拉全量并查物流，统计签收/待取件/紧迫（与场景 Tab 一致）。

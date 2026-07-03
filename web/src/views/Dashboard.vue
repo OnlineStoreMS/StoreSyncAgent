@@ -63,6 +63,13 @@ const refundScenarios = computed(() => [
     desc: '换货进行中',
   },
   {
+    key: 'wait_send_exchange',
+    label: '待发出换货商品',
+    value: refundStats.value?.waitSendExchange,
+    color: '#9c6ade',
+    desc: '需发出换货商品',
+  },
+  {
     key: 'urgent',
     label: '时效紧迫',
     value: refundStats.value?.urgent,

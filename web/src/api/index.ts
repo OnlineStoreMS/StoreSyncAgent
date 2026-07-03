@@ -224,6 +224,7 @@ export interface RefundStats {
   waitSellerAgree: number
   refundOnlyPending: number
   exchangePending: number
+  waitSendExchange: number
   returnSigned: number
   pickupPending: number
   urgent: number
