@@ -7,13 +7,13 @@
 | 服务 | 端口 | 说明 |
 |------|------|------|
 | `storesyncagent-api` | 8097 | Go API |
-| `storesyncagent-web` | 5177 | Nginx + Vue，反代 `/api/` → API |
+| `storesyncagent-web` | 5178 | Nginx + Vue，反代 `/api/` → API（5177 留给 AfterSales HTTPS） |
 
 ## 本地开发
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
-export KDZS_PASSWORD=你的密码   # 或写入 config.yaml（勿提交）
+make init-env
+# 编辑 configs/config.yaml（手机号）与 .env（KDZS_PASSWORD）
 
 # 后端
 go run ./cmd/api -config configs/config.yaml
@@ -24,37 +24,32 @@ cd web && npm install && npm run dev
 
 本地一体化调试 API 静态资源：`go run ./cmd/api -config configs/config.yaml -web-dist web/dist`
 
-## Docker（仓库内）
+## Docker 部署（本仓库）
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
-cp .env.example .env
-
-docker compose up -d --build
+make init-env    # 创建 .env、configs/config.yaml
+make up          # 本地 build 并启动
 ```
 
-访问 http://localhost:5177
+- Web：http://localhost:5178
+- API：http://localhost:8097/api/v1/health
 
-## 生产部署（推荐）
+其他命令：`make down` / `make logs` / `make ps` / `make restart`
 
-使用 **deploy** 仓库独立目录：
+### 从 ACR 拉取镜像（生产）
 
 ```bash
-cd ~/projects/deploy/storesyncagent
-make init-env-acr
+make init-env-acr   # cp .env.acr.example → .env
+# 填写 ACR 凭证、KDZS_PASSWORD、configs/config.yaml
+
 make up-images
 ```
-
-见 [deploy/storesyncagent/README.md](../deploy/storesyncagent/README.md)（若与 deploy 同级）。
 
 ## CI → 阿里云 ACR
 
 Workflow：`.github/workflows/docker-push-acr.yml`
 
-推送镜像：
-
-- `storesyncagent-api`
-- `storesyncagent-web`
+推送镜像：`storesyncagent-api`、`storesyncagent-web`
 
 Organization Secrets（与 ProductCore 共用）：`ALIYUN_ACR_REGISTRY`、`ALIYUN_ACR_NAMESPACE`、`ALIYUN_ACR_USER`、`ALIYUN_ACR_PASSWORD`
 

@@ -1,5 +1,5 @@
-# 本地构建部署（前后端分离）
-# cp configs/config.example.yaml configs/config.yaml && cp .env.example .env
+# 本地构建：make up
+# ACR 拉取：make up-images
 
 name: storesyncagent
 
@@ -37,4 +37,4 @@ services:
       storesyncagent-api:
         condition: service_healthy
     ports:
-      - "${WEB_PORT:-5177}:80"
+      - "${WEB_PORT:-5178}:80"
