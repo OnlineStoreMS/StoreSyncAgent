@@ -318,6 +318,7 @@ export interface ReturnExchangeRecord {
   submitTime?: string
   orderNo?: string
   recipientInfo?: string
+  parsedRecipientInfo?: string
   outboundTrackingNo?: string
   remark?: string
   platform?: string

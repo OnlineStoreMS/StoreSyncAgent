@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
@@ -12,11 +12,17 @@ import {
   type ReturnExchangeRecord,
   type TradeGoods,
 } from '../../api'
+import { formatCopyDate, parseDateValue, parseRecipientAddress } from '../../utils/addressParse'
 
 const loading = reactive({ list: false, lookup: false, save: false })
 const rows = ref<ReturnExchangeRecord[]>([])
 const lookupRowId = ref<string>()
 const afterSaleTypes = ['补发', '换货', '退货退款', '仅退款', '其他']
+
+const sortState = ref<{ prop: string; order: 'ascending' | 'descending' | null }>({
+  prop: '',
+  order: null,
+})
 
 const statusCodeMap: Record<string, string> = {
   ORDER_COMPLETED: '交易完成',
@@ -28,6 +34,23 @@ const statusCodeMap: Record<string, string> = {
   WAIT_AUDIT: '待推单',
   ORDER_CANCEL: '交易关闭',
   TRADE_CLOSED: '交易关闭',
+}
+
+const sortedRows = computed(() => {
+  const list = [...rows.value]
+  const { prop, order } = sortState.value
+  if (!prop || !order) return list
+  const dir = order === 'ascending' ? 1 : -1
+  return list.sort((a, b) => {
+    const av = parseDateValue(a[prop as keyof ReturnExchangeRecord] as string)
+    const bv = parseDateValue(b[prop as keyof ReturnExchangeRecord] as string)
+    if (av === bv) return 0
+    return av > bv ? dir : -dir
+  })
+})
+
+function onSortChange({ prop, order }: { prop: string; order: 'ascending' | 'descending' | null }) {
+  sortState.value = { prop: prop || '', order: order || null }
 }
 
 async function loadList() {
@@ -45,7 +68,6 @@ async function loadList() {
 function blankRow(): ReturnExchangeRecord {
   return {
     id: '',
-    seqNo: 0,
     buyerNick: '',
     afterSaleType: '补发',
     returnTrackingNo: '',
@@ -54,6 +76,7 @@ function blankRow(): ReturnExchangeRecord {
     submitTime: '',
     orderNo: '',
     recipientInfo: '',
+    parsedRecipientInfo: '',
     outboundTrackingNo: '',
     remark: '',
     shopName: '',
@@ -107,6 +130,12 @@ async function saveRow(row: ReturnExchangeRecord) {
   }
 }
 
+async function onRecipientBlur(row: ReturnExchangeRecord) {
+  const raw = row.recipientInfo?.trim() || ''
+  row.parsedRecipientInfo = raw ? parseRecipientAddress(raw) : ''
+  await saveRow(row)
+}
+
 async function removeRow(row: ReturnExchangeRecord) {
   if (!row.id) return
   try {
@@ -117,6 +146,31 @@ async function removeRow(row: ReturnExchangeRecord) {
   } catch (e: any) {
     if (e === 'cancel' || e?.message === 'cancel') return
     ElMessage.error(e?.response?.data?.error || e.message || '删除失败')
+  }
+}
+
+function buildReshipCopyText(row: ReturnExchangeRecord): string {
+  const dateLine = formatCopyDate(new Date())
+  const address =
+    row.parsedRecipientInfo?.trim() ||
+    (row.recipientInfo?.trim() ? parseRecipientAddress(row.recipientInfo) : '')
+  const type = row.afterSaleType?.trim() || '补发'
+  const spec = row.spec?.trim() || ''
+  const tail = `--- 【${type}】${spec}`
+  return [dateLine, address, tail].filter(Boolean).join('\n')
+}
+
+async function copyReshipInfo(row: ReturnExchangeRecord) {
+  const text = buildReshipCopyText(row)
+  if (!text || text === formatCopyDate(new Date()) + '\n--- 【补发】') {
+    ElMessage.warning('请先填写新收件地址和规格')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    ElMessage.success('已复制补发信息')
+  } catch {
+    ElMessage.error('复制失败，请检查浏览器权限')
   }
 }
 
@@ -171,8 +225,8 @@ onMounted(loadList)
         <div>
           <div class="title">退换货管理</div>
           <div class="desc">
-            填写订单号后自动补充店铺、商品（SKU 图/规格）、原收件信息、金额、付款时间、状态；
-            <strong>客户昵称</strong>与<strong>新收件地址</strong>请手动填写
+            填写订单号后自动补充店铺、商品、原收件信息等；新收件地址手填后自动解析；
+            操作列可<strong>复制补发信息</strong>
           </div>
         </div>
         <div class="actions">
@@ -185,20 +239,21 @@ onMounted(loadList)
     <el-card shadow="never" class="table-card">
       <el-table
         v-loading="loading.list"
-        :data="rows"
+        :data="sortedRows"
         border
         stripe
         empty-text="暂无记录，点击「新增一行」开始维护"
         style="width: 100%"
         :header-cell-style="{ background: '#fafafa' }"
+        @sort-change="onSortChange"
       >
-        <el-table-column label="序号" width="64" fixed>
-          <template #default="{ row }">
-            <el-input-number v-model="row.seqNo" :min="0" :controls="false" size="small" @change="saveRow(row)" />
+        <el-table-column label="序号" width="52" align="center">
+          <template #default="{ $index }">
+            <span class="seq-num">{{ $index + 1 }}</span>
           </template>
         </el-table-column>
 
-        <el-table-column label="订单号" width="190" fixed>
+        <el-table-column label="订单号" width="190" fixed="left">
           <template #default="{ row }">
             <div class="order-cell">
               <el-input
@@ -298,7 +353,7 @@ onMounted(loadList)
           </template>
         </el-table-column>
 
-        <el-table-column label="顾客反馈时间" width="150">
+        <el-table-column prop="feedbackTime" label="顾客反馈时间" width="150" sortable="custom">
           <template #default="{ row }">
             <el-date-picker
               v-model="row.feedbackTime"
@@ -314,7 +369,7 @@ onMounted(loadList)
           </template>
         </el-table-column>
 
-        <el-table-column label="提交时间" width="150">
+        <el-table-column prop="submitTime" label="提交时间" width="150" sortable="custom">
           <template #default="{ row }">
             <el-date-picker
               v-model="row.submitTime"
@@ -330,7 +385,7 @@ onMounted(loadList)
           </template>
         </el-table-column>
 
-        <el-table-column label="新收件地址" min-width="200">
+        <el-table-column label="新收件地址" min-width="220">
           <template #header>
             <span>新收件地址</span>
             <span class="manual-tag">手填</span>
@@ -340,10 +395,11 @@ onMounted(loadList)
               v-model="row.recipientInfo"
               size="small"
               type="textarea"
-              placeholder="顾客提供的新地址"
-              :autosize="{ minRows: 2, maxRows: 6 }"
-              @blur="saveRow(row)"
+              placeholder="顾客提供的新地址，失焦自动解析"
+              :autosize="{ minRows: 2, maxRows: 4 }"
+              @blur="onRecipientBlur(row)"
             />
+            <div v-if="row.parsedRecipientInfo" class="parsed-preview">{{ row.parsedRecipientInfo }}</div>
           </template>
         </el-table-column>
 
@@ -359,9 +415,12 @@ onMounted(loadList)
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="72" fixed="right">
+        <el-table-column label="操作" width="108">
           <template #default="{ row }">
-            <el-button link type="danger" @click="removeRow(row)">删除</el-button>
+            <div class="action-col">
+              <el-button link type="primary" @click="copyReshipInfo(row)">复制补发</el-button>
+              <el-button link type="danger" @click="removeRow(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -406,6 +465,10 @@ onMounted(loadList)
 }
 .table-card :deep(.el-card__body) {
   padding: 0;
+}
+.seq-num {
+  font-size: 13px;
+  color: #909399;
 }
 .order-cell {
   display: flex;
@@ -466,5 +529,27 @@ onMounted(loadList)
 }
 .date-picker :deep(.el-input__wrapper) {
   padding: 0 8px;
+}
+.parsed-preview {
+  margin-top: 4px;
+  padding: 4px 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: #67c23a;
+  background: #f0f9eb;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.action-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+.action-col .el-button {
+  margin: 0;
+  padding: 0;
+  height: auto;
 }
 </style>

@@ -27,7 +27,8 @@ type ReturnExchangeRecord struct {
 	FeedbackTime       string  `json:"feedbackTime,omitempty"`
 	SubmitTime         string  `json:"submitTime,omitempty"`
 	OrderNo            string  `json:"orderNo,omitempty"`
-	RecipientInfo      string  `json:"recipientInfo,omitempty"`      // 顾客提供的新收件地址（手填）
+	RecipientInfo         string                `json:"recipientInfo,omitempty"`      // 顾客提供的新收件地址（手填）
+	ParsedRecipientInfo   string                `json:"parsedRecipientInfo,omitempty"` // 解析后的格式化地址
 	OutboundTrackingNo string  `json:"outboundTrackingNo,omitempty"`
 	Remark             string  `json:"remark,omitempty"`
 	Platform           string  `json:"platform,omitempty"`
