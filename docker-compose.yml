@@ -1,0 +1,28 @@
+# 本地部署：复制 configs/config.example.yaml 为 configs/config.yaml，再创建 .env 填入密码
+# 启动：docker compose up -d --build
+
+name: storesyncagent
+
+services:
+  storesyncagent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/onlinestorems/storesyncagent:latest
+    container_name: storesyncagent
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8097}:8097"
+    volumes:
+      - ./configs/config.yaml:/app/configs/config.yaml:ro
+    environment:
+      GIN_MODE: release
+      KDZS_PASSWORD: ${KDZS_PASSWORD:-}
+      KDZS_ACCOUNT_ACCOUNT_1_PASSWORD: ${KDZS_ACCOUNT_ACCOUNT_1_PASSWORD:-}
+      KDZS_ACCOUNT_ACCOUNT_2_PASSWORD: ${KDZS_ACCOUNT_ACCOUNT_2_PASSWORD:-}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8097/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

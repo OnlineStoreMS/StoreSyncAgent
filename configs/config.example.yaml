@@ -1,0 +1,19 @@
+server:
+  port: 8097
+  mode: release
+
+kdzs:
+  base_url: https://df.kdzs.com
+  default_account_id: account_1
+  # password 留空，通过环境变量 KDZS_PASSWORD 或 KDZS_ACCOUNT_{ID}_PASSWORD 注入
+  accounts:
+    - id: account_1
+      name: 商家账号A
+      role: merchant
+      mobile: "13000000001"
+      password: ""
+    - id: account_2
+      name: 商家账号B
+      role: merchant
+      mobile: "13000000002"
+      password: ""

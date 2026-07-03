@@ -1,0 +1,15 @@
+.git
+.github
+configs/config.yaml
+.env
+.env.*
+!.env.example
+web/node_modules
+web/dist
+bin
+*.exe
+*.test
+**/*_test.go
+cmd/kdzs-test
+cmd/kdzs-debug
+cmd/refundprobe
