@@ -43,7 +43,20 @@ function blankRow(): ReturnExchangeRecord {
     recipientInfo: '',
     outboundTrackingNo: '',
     remark: '',
+    shopName: '',
+    orderBuyerNick: '',
+    goodsSummary: '',
+    memoNotes: '',
+    originalRecipientInfo: '',
+    payment: 0,
+    payTime: '',
+    statusText: '',
   }
+}
+
+function formatMoney(v?: number) {
+  if (!v || v <= 0) return ''
+  return v.toFixed(2)
 }
 
 async function addRow() {
@@ -91,15 +104,19 @@ function applyLookup(row: ReturnExchangeRecord, data: OrderLookup) {
     ElMessage.warning('未找到该订单，请检查订单号或平台')
     return
   }
-  if (data.buyerNick) row.buyerNick = data.buyerNick
-  if (data.recipientInfo) row.recipientInfo = data.recipientInfo
-  if (data.spec && !row.spec) row.spec = data.spec
-  if (data.outboundTrackingNo && !row.outboundTrackingNo) row.outboundTrackingNo = data.outboundTrackingNo
-  if (data.platform) row.platform = data.platform
-  if (data.sysTid) row.sysTid = data.sysTid
-  if (data.shopName) row.shopName = data.shopName
-  if (data.goodsTitle) row.goodsTitle = data.goodsTitle
-  ElMessage.success('已自动填充订单信息')
+  // 仅填充订单侧字段；客户昵称、新收件地址保持手填不动
+  row.shopName = data.shopName || ''
+  row.orderBuyerNick = data.orderBuyerNick || ''
+  row.goodsSummary = data.goodsSummary || ''
+  row.goodsTitle = data.goodsTitle || ''
+  row.memoNotes = data.memoNotes || ''
+  row.originalRecipientInfo = data.originalRecipientInfo || ''
+  row.payment = data.payment || 0
+  row.payTime = data.payTime || ''
+  row.statusText = data.statusText || ''
+  row.platform = data.platform || row.platform
+  row.sysTid = data.sysTid || ''
+  ElMessage.success('已补充订单信息（店铺/买家/商品/原收件等）')
 }
 
 async function onOrderNoBlur(row: ReturnExchangeRecord) {
@@ -136,7 +153,10 @@ onMounted(loadList)
       <div class="toolbar">
         <div>
           <div class="title">退换货管理</div>
-          <div class="desc">替代 Excel 手工维护；填写订单号后自动检索买家昵称、规格、收件人等信息</div>
+          <div class="desc">
+            填写订单号后自动补充店铺、买家、商品、留言、原收件信息、金额、付款时间、状态；
+            <strong>客户昵称</strong>与<strong>新收件地址</strong>请手动填写
+          </div>
         </div>
         <div class="actions">
           <el-button :icon="Refresh" :loading="loading.list" @click="loadList">刷新</el-button>
@@ -155,55 +175,19 @@ onMounted(loadList)
         style="width: 100%"
         :header-cell-style="{ background: '#fafafa' }"
       >
-        <el-table-column label="序号" width="70" fixed>
+        <el-table-column label="序号" width="64" fixed>
           <template #default="{ row }">
             <el-input-number v-model="row.seqNo" :min="0" :controls="false" size="small" @change="saveRow(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="客户昵称" width="130" fixed>
-          <template #default="{ row }">
-            <el-input v-model="row.buyerNick" size="small" placeholder="自动或手填" @blur="saveRow(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="售后类型" width="110">
-          <template #default="{ row }">
-            <el-select v-model="row.afterSaleType" size="small" filterable allow-create @change="saveRow(row)">
-              <el-option v-for="t in afterSaleTypes" :key="t" :label="t" :value="t" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="退回单号" width="150">
-          <template #default="{ row }">
-            <el-input
-              v-model="row.returnTrackingNo"
-              size="small"
-              placeholder="补发可不填"
-              @blur="saveRow(row)"
-            />
-          </template>
-        </el-table-column>
-        <el-table-column label="规格" min-width="160">
-          <template #default="{ row }">
-            <el-input v-model="row.spec" size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" @blur="saveRow(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="顾客反馈时间" width="130">
-          <template #default="{ row }">
-            <el-input v-model="row.feedbackTime" size="small" placeholder="如 2026.7.1" @blur="saveRow(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="提交时间" width="130">
-          <template #default="{ row }">
-            <el-input v-model="row.submitTime" size="small" @blur="saveRow(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="订单号" width="200" fixed>
+
+        <el-table-column label="订单号" width="190" fixed>
           <template #default="{ row }">
             <div class="order-cell">
               <el-input
                 v-model="row.orderNo"
                 size="small"
-                placeholder="输入后失焦自动检索"
+                placeholder="输入后失焦检索"
                 @blur="onOrderNoBlur(row)"
               />
               <el-button
@@ -216,28 +200,111 @@ onMounted(loadList)
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="收件人信息" min-width="280">
+
+        <el-table-column label="店铺" width="120">
+          <template #default="{ row }">
+            <span class="auto-field">{{ row.shopName || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="买家" width="110">
+          <template #default="{ row }">
+            <span class="auto-field">{{ row.orderBuyerNick || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="商品" min-width="180">
+          <template #default="{ row }">
+            <span class="auto-field multiline">{{ row.goodsSummary || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="留言备注" min-width="140">
+          <template #default="{ row }">
+            <span class="auto-field multiline">{{ row.memoNotes || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="原收件信息" min-width="200">
+          <template #default="{ row }">
+            <span class="auto-field multiline">{{ row.originalRecipientInfo || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="金额" width="80" align="right">
+          <template #default="{ row }">
+            <span class="auto-field">{{ formatMoney(row.payment) || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="付款时间" width="150">
+          <template #default="{ row }">
+            <span class="auto-field">{{ row.payTime || '—' }}</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <span class="auto-field">{{ row.statusText || '—' }}</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="客户昵称" width="120">
+          <template #header>
+            <span>客户昵称</span>
+            <span class="manual-tag">手填</span>
+          </template>
+          <template #default="{ row }">
+            <el-input v-model="row.buyerNick" size="small" placeholder="手动填写" @blur="saveRow(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="售后类型" width="100">
+          <template #default="{ row }">
+            <el-select v-model="row.afterSaleType" size="small" filterable allow-create @change="saveRow(row)">
+              <el-option v-for="t in afterSaleTypes" :key="t" :label="t" :value="t" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column label="退回单号" width="130">
+          <template #default="{ row }">
+            <el-input v-model="row.returnTrackingNo" size="small" placeholder="补发可不填" @blur="saveRow(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="规格" min-width="140">
+          <template #default="{ row }">
+            <el-input v-model="row.spec" size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" @blur="saveRow(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="顾客反馈时间" width="120">
+          <template #default="{ row }">
+            <el-input v-model="row.feedbackTime" size="small" placeholder="如 2026.7.1" @blur="saveRow(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="提交时间" width="120">
+          <template #default="{ row }">
+            <el-input v-model="row.submitTime" size="small" @blur="saveRow(row)" />
+          </template>
+        </el-table-column>
+        <el-table-column label="新收件地址" min-width="200">
+          <template #header>
+            <span>新收件地址</span>
+            <span class="manual-tag">手填</span>
+          </template>
           <template #default="{ row }">
             <el-input
               v-model="row.recipientInfo"
               size="small"
               type="textarea"
+              placeholder="顾客提供的新地址"
               :autosize="{ minRows: 2, maxRows: 6 }"
               @blur="saveRow(row)"
             />
           </template>
         </el-table-column>
-        <el-table-column label="发出快递单号" width="150">
+        <el-table-column label="发出快递单号" width="130">
           <template #default="{ row }">
             <el-input v-model="row.outboundTrackingNo" size="small" @blur="saveRow(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="备注" min-width="120">
+        <el-table-column label="备注" min-width="100">
           <template #default="{ row }">
             <el-input v-model="row.remark" size="small" @blur="saveRow(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="72" fixed="right">
           <template #default="{ row }">
             <el-button link type="danger" @click="removeRow(row)">删除</el-button>
           </template>
@@ -271,6 +338,11 @@ onMounted(loadList)
   margin-top: 4px;
   font-size: 13px;
   color: #909399;
+  line-height: 1.5;
+}
+.desc strong {
+  color: #606266;
+  font-weight: 600;
 }
 .actions {
   display: flex;
@@ -287,5 +359,27 @@ onMounted(loadList)
 }
 .order-cell .el-input {
   flex: 1;
+}
+.auto-field {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.auto-field.multiline {
+  display: block;
+  max-height: 120px;
+  overflow: auto;
+}
+.manual-tag {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  color: #e6a23c;
+  background: #fdf6ec;
+  border-radius: 3px;
+  vertical-align: middle;
 }
 </style>

@@ -324,6 +324,13 @@ export interface ReturnExchangeRecord {
   sysTid?: string
   shopName?: string
   goodsTitle?: string
+  orderBuyerNick?: string
+  goodsSummary?: string
+  memoNotes?: string
+  originalRecipientInfo?: string
+  payment?: number
+  payTime?: string
+  statusText?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -331,14 +338,17 @@ export interface ReturnExchangeRecord {
 export interface OrderLookup {
   found: boolean
   orderNo: string
-  buyerNick?: string
-  recipientInfo?: string
-  spec?: string
-  outboundTrackingNo?: string
   platform?: string
   sysTid?: string
   shopName?: string
+  orderBuyerNick?: string
+  goodsSummary?: string
   goodsTitle?: string
+  memoNotes?: string
+  originalRecipientInfo?: string
+  payment?: number
+  payTime?: string
+  statusText?: string
   source?: string
 }
 

@@ -379,6 +379,10 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 	return item
 }
 
+func ParseTradeItemFromJSON(raw json.RawMessage, platform string) *TradeListItem {
+	return parseTradeItem(raw, platform)
+}
+
 func parseTradeItemLegacyTrades(item *TradeListItem, trades []any) *TradeListItem {
 	for _, t := range trades {
 		trade, _ := t.(map[string]any)

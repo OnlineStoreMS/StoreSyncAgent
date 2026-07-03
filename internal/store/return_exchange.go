@@ -15,20 +15,27 @@ import (
 type ReturnExchangeRecord struct {
 	ID                 string `json:"id"`
 	SeqNo              int    `json:"seqNo,omitempty"`
-	BuyerNick          string `json:"buyerNick,omitempty"`
-	AfterSaleType      string `json:"afterSaleType,omitempty"`
-	ReturnTrackingNo   string `json:"returnTrackingNo,omitempty"`
-	Spec               string `json:"spec,omitempty"`
-	FeedbackTime       string `json:"feedbackTime,omitempty"`
-	SubmitTime         string `json:"submitTime,omitempty"`
-	OrderNo            string `json:"orderNo,omitempty"`
-	RecipientInfo      string `json:"recipientInfo,omitempty"`
-	OutboundTrackingNo string `json:"outboundTrackingNo,omitempty"`
-	Remark             string `json:"remark,omitempty"`
-	Platform           string `json:"platform,omitempty"`
-	SysTid             string `json:"sysTid,omitempty"`
-	ShopName           string `json:"shopName,omitempty"`
-	GoodsTitle         string `json:"goodsTitle,omitempty"`
+	BuyerNick          string  `json:"buyerNick,omitempty"`          // 客户昵称（手填）
+	AfterSaleType      string  `json:"afterSaleType,omitempty"`
+	ReturnTrackingNo   string  `json:"returnTrackingNo,omitempty"`
+	Spec               string  `json:"spec,omitempty"`
+	FeedbackTime       string  `json:"feedbackTime,omitempty"`
+	SubmitTime         string  `json:"submitTime,omitempty"`
+	OrderNo            string  `json:"orderNo,omitempty"`
+	RecipientInfo      string  `json:"recipientInfo,omitempty"`      // 顾客提供的新收件地址（手填）
+	OutboundTrackingNo string  `json:"outboundTrackingNo,omitempty"`
+	Remark             string  `json:"remark,omitempty"`
+	Platform           string  `json:"platform,omitempty"`
+	SysTid             string  `json:"sysTid,omitempty"`
+	ShopName           string  `json:"shopName,omitempty"`
+	GoodsTitle         string  `json:"goodsTitle,omitempty"`
+	OrderBuyerNick     string  `json:"orderBuyerNick,omitempty"`     // 订单买家（自动）
+	GoodsSummary       string  `json:"goodsSummary,omitempty"`       // 商品（自动）
+	MemoNotes          string  `json:"memoNotes,omitempty"`          // 留言备注（自动）
+	OriginalRecipientInfo string `json:"originalRecipientInfo,omitempty"` // 原收件信息（自动）
+	Payment            float64 `json:"payment,omitempty"`
+	PayTime            string  `json:"payTime,omitempty"`
+	StatusText         string  `json:"statusText,omitempty"`
 	CreatedAt          string `json:"createdAt,omitempty"`
 	UpdatedAt          string `json:"updatedAt,omitempty"`
 }
