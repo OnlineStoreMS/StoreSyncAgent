@@ -9,8 +9,13 @@ import (
 )
 
 type Config struct {
-	Server ServerConfig `mapstructure:"server"`
-	Kdzs   KdzsConfig   `mapstructure:"kdzs"`
+	Server  ServerConfig  `mapstructure:"server"`
+	Kdzs    KdzsConfig    `mapstructure:"kdzs"`
+	Storage StorageConfig `mapstructure:"storage"`
+}
+
+type StorageConfig struct {
+	DataDir string `mapstructure:"data_dir"`
 }
 
 type ServerConfig struct {

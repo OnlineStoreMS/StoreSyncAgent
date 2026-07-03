@@ -30,6 +30,11 @@ func Setup(h *handler.Handler, webDist string) *gin.Engine {
 		api.GET("/refunds", h.ListRefunds)
 		api.GET("/refunds/stats", h.RefundStats)
 		api.GET("/refunds/logistics", h.RefundLogistics)
+		api.GET("/orders/lookup", h.LookupOrder)
+		api.GET("/return-exchanges", h.ListReturnExchanges)
+		api.POST("/return-exchanges", h.CreateReturnExchange)
+		api.PUT("/return-exchanges/:id", h.UpdateReturnExchange)
+		api.DELETE("/return-exchanges/:id", h.DeleteReturnExchange)
 	}
 
 	mountWebUI(r, webDist)

@@ -18,6 +18,7 @@ type TradeQuery struct {
 	TimeType      int
 	StartDateTime string
 	EndDateTime   string
+	Tid           string
 }
 
 type TradeListResult struct {
@@ -78,6 +79,7 @@ type tradeListRequest struct {
 	ShopIDs         []string `json:"shopIds,omitempty"`
 	FactoryIDs      []string `json:"factoryIds,omitempty"`
 	DistributorIDs  []string `json:"distributorIds,omitempty"`
+	Tids            []string `json:"tids,omitempty"`
 	StartDateTime   string   `json:"startDateTime,omitempty"`
 	EndDateTime     string   `json:"endDateTime,omitempty"`
 	TimeType        int      `json:"timeType,omitempty"`
@@ -115,6 +117,16 @@ func ResolveDateRange(start, end string) (string, string) {
 	return DefaultDateRange()
 }
 
+func ResolveTradeSearchDateRange(start, end string) (string, string) {
+	if start != "" && end != "" {
+		return start, end
+	}
+	now := time.Now()
+	endTime := now.Format("2006-01-02 15:04:05")
+	startTime := now.AddDate(-1, 0, 0).Truncate(24 * time.Hour).Format("2006-01-02 15:04:05")
+	return startTime, endTime
+}
+
 func DefaultTimeType() int {
 	return 0
 }
@@ -133,7 +145,8 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 	if q.PageSize <= 0 {
 		q.PageSize = 20
 	}
-	if q.TradeStatus == "" {
+	idSearch := strings.TrimSpace(q.Tid) != ""
+	if q.TradeStatus == "" && !idSearch {
 		q.TradeStatus = DefaultTradeStatus()
 	}
 
@@ -215,6 +228,9 @@ func (s *Session) QueryTradesRaw(ctx context.Context, q TradeQuery) (map[string]
 func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (tradeListRequest, error) {
 	userID, _ := strconv.ParseInt(s.UserID(), 10, 64)
 	start, end := ResolveDateRange(q.StartDateTime, q.EndDateTime)
+	if strings.TrimSpace(q.Tid) != "" {
+		start, end = ResolveTradeSearchDateRange(q.StartDateTime, q.EndDateTime)
+	}
 	timeType := q.TimeType
 
 	body := tradeListRequest{
@@ -229,6 +245,9 @@ func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (trad
 		StartDateTime: start,
 		EndDateTime:   end,
 		TimeType:      timeType,
+	}
+	if tid := strings.TrimSpace(q.Tid); tid != "" {
+		body.Tids = []string{tid}
 	}
 	if q.ShopID != "" {
 		body.ShopIDs = []string{q.ShopID}

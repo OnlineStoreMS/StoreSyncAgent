@@ -1,6 +1,8 @@
 configs/config.yaml
 .env
 .env.local
+data/return-exchanges.json
+show/
 *.exe
 *.test
 /bin/

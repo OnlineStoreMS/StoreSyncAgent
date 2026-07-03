@@ -14,7 +14,11 @@ const menuItems = [
   { path: '/shops', title: '店铺管理', icon: Shop },
   { path: '/factories', title: '厂家管理', icon: OfficeBuilding },
   { path: '/orders', title: '订单列表', icon: List },
-  { path: '/refunds', title: '售后管理', icon: Service },
+]
+
+const afterSaleItems = [
+  { path: '/refunds', title: '售后列表' },
+  { path: '/return-exchanges', title: '退换货管理' },
 ]
 
 const logoText = computed(() => (collapsed.value ? 'SSA' : 'StoreSyncAgent'))
@@ -46,6 +50,20 @@ function navigate(path: string) {
         <el-icon><component :is="item.icon" /></el-icon>
         <span>{{ item.title }}</span>
       </el-menu-item>
+      <el-sub-menu index="aftersale">
+        <template #title>
+          <el-icon><Service /></el-icon>
+          <span>售后管理</span>
+        </template>
+        <el-menu-item
+          v-for="item in afterSaleItems"
+          :key="item.path"
+          :index="item.path"
+          @click="navigate(item.path)"
+        >
+          {{ item.title }}
+        </el-menu-item>
+      </el-sub-menu>
     </el-menu>
     <div v-if="!collapsed" class="sidebar-footer">快递助手 · 店铺订单同步</div>
   </aside>

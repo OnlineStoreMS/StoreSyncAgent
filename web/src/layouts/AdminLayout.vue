@@ -15,6 +15,8 @@ const breadcrumbs = computed(() => {
   if (route.path.startsWith('/shops')) return ['同步中心', '店铺管理']
   if (route.path.startsWith('/factories')) return ['同步中心', '厂家管理']
   if (route.path.startsWith('/orders')) return ['同步中心', '订单列表']
+  if (route.path.startsWith('/return-exchanges')) return ['售后管理', '退换货管理']
+  if (route.path.startsWith('/refunds')) return ['售后管理', '售后列表']
   return ['首页', title]
 })
 

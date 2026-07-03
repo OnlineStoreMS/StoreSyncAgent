@@ -306,3 +306,63 @@ export async function getRefundLogistics(params: { platform?: string; sid: strin
   const { data } = await http.get<LogisticsDetail>('/refunds/logistics', { params })
   return data
 }
+
+export interface ReturnExchangeRecord {
+  id: string
+  seqNo?: number
+  buyerNick?: string
+  afterSaleType?: string
+  returnTrackingNo?: string
+  spec?: string
+  feedbackTime?: string
+  submitTime?: string
+  orderNo?: string
+  recipientInfo?: string
+  outboundTrackingNo?: string
+  remark?: string
+  platform?: string
+  sysTid?: string
+  shopName?: string
+  goodsTitle?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface OrderLookup {
+  found: boolean
+  orderNo: string
+  buyerNick?: string
+  recipientInfo?: string
+  spec?: string
+  outboundTrackingNo?: string
+  platform?: string
+  sysTid?: string
+  shopName?: string
+  goodsTitle?: string
+  source?: string
+}
+
+export async function listReturnExchanges() {
+  const { data } = await http.get<{ items: ReturnExchangeRecord[]; total: number }>('/return-exchanges')
+  return data
+}
+
+export async function createReturnExchange(body: Partial<ReturnExchangeRecord>) {
+  const { data } = await http.post<ReturnExchangeRecord>('/return-exchanges', body)
+  return data
+}
+
+export async function updateReturnExchange(id: string, body: Partial<ReturnExchangeRecord>) {
+  const { data } = await http.put<ReturnExchangeRecord>(`/return-exchanges/${id}`, body)
+  return data
+}
+
+export async function deleteReturnExchange(id: string) {
+  const { data } = await http.delete<{ ok: boolean }>(`/return-exchanges/${id}`)
+  return data
+}
+
+export async function lookupOrder(params: { orderNo: string; platform?: string }) {
+  const { data } = await http.get<OrderLookup>('/orders/lookup', { params })
+  return data
+}

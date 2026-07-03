@@ -13,6 +13,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./configs/config.yaml:/config/config.yaml:ro
+      - ./data:/app/data
     environment:
       KDZS_PASSWORD: ${KDZS_PASSWORD:-}
       KDZS_ACCOUNT_ACCOUNT_1_PASSWORD: ${KDZS_ACCOUNT_ACCOUNT_1_PASSWORD:-}

@@ -2,6 +2,9 @@ server:
   port: 8097
   mode: release
 
+storage:
+  data_dir: data
+
 kdzs:
   base_url: https://df.kdzs.com
   default_account_id: account_1

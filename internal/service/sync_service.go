@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -10,25 +11,38 @@ import (
 
 	"storesyncagent/internal/config"
 	"storesyncagent/internal/kdzs"
+	"storesyncagent/internal/store"
 )
 
 type SyncService struct {
-	cfg             *config.Config
-	client          *kdzs.Client
-	session         *kdzs.Session
-	mu              sync.Mutex
-	activeAccountID string
+	cfg                 *config.Config
+	client              *kdzs.Client
+	session             *kdzs.Session
+	mu                  sync.Mutex
+	activeAccountID     string
+	returnExchangeStore *store.ReturnExchangeStore
 }
 
-func NewSyncService(cfg *config.Config) *SyncService {
+func NewSyncService(cfg *config.Config) (*SyncService, error) {
 	client := kdzs.NewClient(cfg.Kdzs.BaseURL)
-	svc := &SyncService{
-		cfg:             cfg,
-		client:          client,
-		session:         kdzs.NewSession(client),
-		activeAccountID: cfg.Kdzs.ActiveAccountID(),
+	dataDir := cfg.Storage.DataDir
+	if dataDir == "" {
+		dataDir = "data"
 	}
-	return svc
+	storePath := filepath.Join(dataDir, "return-exchanges.json")
+	seedPath := filepath.Join(dataDir, "return-exchanges.seed.json")
+	rexStore, err := store.NewReturnExchangeStore(storePath, seedPath)
+	if err != nil {
+		return nil, fmt.Errorf("return exchange store: %w", err)
+	}
+	svc := &SyncService{
+		cfg:                 cfg,
+		client:              client,
+		session:             kdzs.NewSession(client),
+		activeAccountID:     cfg.Kdzs.ActiveAccountID(),
+		returnExchangeStore: rexStore,
+	}
+	return svc, nil
 }
 
 func (s *SyncService) activeAccount() (config.KdzsAccount, error) {

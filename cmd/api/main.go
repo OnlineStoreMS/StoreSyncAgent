@@ -35,7 +35,10 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	svc := service.NewSyncService(cfg)
+	svc, err := service.NewSyncService(cfg)
+	if err != nil {
+		log.Fatal(err)
+	}
 	h := handler.New(svc)
 	engine := router.Setup(h, *webDist)
 
