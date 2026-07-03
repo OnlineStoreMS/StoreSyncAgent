@@ -10,12 +10,25 @@ import {
   updateReturnExchange,
   type OrderLookup,
   type ReturnExchangeRecord,
+  type TradeGoods,
 } from '../../api'
 
 const loading = reactive({ list: false, lookup: false, save: false })
 const rows = ref<ReturnExchangeRecord[]>([])
 const lookupRowId = ref<string>()
 const afterSaleTypes = ['补发', '换货', '退货退款', '仅退款', '其他']
+
+const statusCodeMap: Record<string, string> = {
+  ORDER_COMPLETED: '交易完成',
+  TRADE_FINISHED: '交易完成',
+  ORDER_PAID: '待发货',
+  WAIT_SELLER_SEND_GOODS: '待发货',
+  SELLER_CONSIGNED: '已发货',
+  ORDER_SHIPPED: '已发货',
+  WAIT_AUDIT: '待推单',
+  ORDER_CANCEL: '交易关闭',
+  TRADE_CLOSED: '交易关闭',
+}
 
 async function loadList() {
   loading.list = true
@@ -44,9 +57,7 @@ function blankRow(): ReturnExchangeRecord {
     outboundTrackingNo: '',
     remark: '',
     shopName: '',
-    orderBuyerNick: '',
-    goodsSummary: '',
-    memoNotes: '',
+    goods: [],
     originalRecipientInfo: '',
     payment: 0,
     payTime: '',
@@ -57,6 +68,16 @@ function blankRow(): ReturnExchangeRecord {
 function formatMoney(v?: number) {
   if (!v || v <= 0) return ''
   return v.toFixed(2)
+}
+
+function displayStatus(text?: string) {
+  if (!text) return '—'
+  if (/[\u4e00-\u9fa5]/.test(text)) return text
+  return statusCodeMap[text.toUpperCase()] || text
+}
+
+function rowGoods(row: ReturnExchangeRecord): TradeGoods[] {
+  return row.goods || []
 }
 
 async function addRow() {
@@ -104,19 +125,15 @@ function applyLookup(row: ReturnExchangeRecord, data: OrderLookup) {
     ElMessage.warning('未找到该订单，请检查订单号或平台')
     return
   }
-  // 仅填充订单侧字段；客户昵称、新收件地址保持手填不动
   row.shopName = data.shopName || ''
-  row.orderBuyerNick = data.orderBuyerNick || ''
-  row.goodsSummary = data.goodsSummary || ''
-  row.goodsTitle = data.goodsTitle || ''
-  row.memoNotes = data.memoNotes || ''
+  row.goods = (data.goods || []).map((g) => ({ picUrl: g.picUrl, skuName: g.skuName }))
   row.originalRecipientInfo = data.originalRecipientInfo || ''
   row.payment = data.payment || 0
   row.payTime = data.payTime || ''
   row.statusText = data.statusText || ''
   row.platform = data.platform || row.platform
   row.sysTid = data.sysTid || ''
-  ElMessage.success('已补充订单信息（店铺/买家/商品/原收件等）')
+  ElMessage.success('已补充订单信息')
 }
 
 async function onOrderNoBlur(row: ReturnExchangeRecord) {
@@ -154,7 +171,7 @@ onMounted(loadList)
         <div>
           <div class="title">退换货管理</div>
           <div class="desc">
-            填写订单号后自动补充店铺、买家、商品、留言、原收件信息、金额、付款时间、状态；
+            填写订单号后自动补充店铺、商品（SKU 图/规格）、原收件信息、金额、付款时间、状态；
             <strong>客户昵称</strong>与<strong>新收件地址</strong>请手动填写
           </div>
         </div>
@@ -206,39 +223,48 @@ onMounted(loadList)
             <span class="auto-field">{{ row.shopName || '—' }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="买家" width="110">
+
+        <el-table-column label="商品" min-width="160">
           <template #default="{ row }">
-            <span class="auto-field">{{ row.orderBuyerNick || '—' }}</span>
+            <div v-for="(g, idx) in rowGoods(row)" :key="idx" class="goods-line">
+              <div class="goods-row">
+                <el-image
+                  v-if="g.picUrl"
+                  :src="g.picUrl"
+                  :preview-src-list="[g.picUrl]"
+                  fit="cover"
+                  class="goods-pic"
+                  preview-teleported
+                />
+                <span v-if="g.skuName" class="goods-sku">{{ g.skuName }}</span>
+                <span v-else class="muted">—</span>
+              </div>
+            </div>
+            <span v-if="!rowGoods(row).length" class="muted">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="商品" min-width="180">
-          <template #default="{ row }">
-            <span class="auto-field multiline">{{ row.goodsSummary || '—' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="留言备注" min-width="140">
-          <template #default="{ row }">
-            <span class="auto-field multiline">{{ row.memoNotes || '—' }}</span>
-          </template>
-        </el-table-column>
+
         <el-table-column label="原收件信息" min-width="200">
           <template #default="{ row }">
             <span class="auto-field multiline">{{ row.originalRecipientInfo || '—' }}</span>
           </template>
         </el-table-column>
+
         <el-table-column label="金额" width="80" align="right">
           <template #default="{ row }">
             <span class="auto-field">{{ formatMoney(row.payment) || '—' }}</span>
           </template>
         </el-table-column>
+
         <el-table-column label="付款时间" width="150">
           <template #default="{ row }">
             <span class="auto-field">{{ row.payTime || '—' }}</span>
           </template>
         </el-table-column>
+
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
-            <span class="auto-field">{{ row.statusText || '—' }}</span>
+            <span class="auto-field">{{ displayStatus(row.statusText) }}</span>
           </template>
         </el-table-column>
 
@@ -251,6 +277,7 @@ onMounted(loadList)
             <el-input v-model="row.buyerNick" size="small" placeholder="手动填写" @blur="saveRow(row)" />
           </template>
         </el-table-column>
+
         <el-table-column label="售后类型" width="100">
           <template #default="{ row }">
             <el-select v-model="row.afterSaleType" size="small" filterable allow-create @change="saveRow(row)">
@@ -258,26 +285,51 @@ onMounted(loadList)
             </el-select>
           </template>
         </el-table-column>
+
         <el-table-column label="退回单号" width="130">
           <template #default="{ row }">
             <el-input v-model="row.returnTrackingNo" size="small" placeholder="补发可不填" @blur="saveRow(row)" />
           </template>
         </el-table-column>
+
         <el-table-column label="规格" min-width="140">
           <template #default="{ row }">
             <el-input v-model="row.spec" size="small" type="textarea" :autosize="{ minRows: 1, maxRows: 3 }" @blur="saveRow(row)" />
           </template>
         </el-table-column>
-        <el-table-column label="顾客反馈时间" width="120">
+
+        <el-table-column label="顾客反馈时间" width="150">
           <template #default="{ row }">
-            <el-input v-model="row.feedbackTime" size="small" placeholder="如 2026.7.1" @blur="saveRow(row)" />
+            <el-date-picker
+              v-model="row.feedbackTime"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
+              placeholder="可选"
+              size="small"
+              clearable
+              class="date-picker"
+              @change="saveRow(row)"
+            />
           </template>
         </el-table-column>
-        <el-table-column label="提交时间" width="120">
+
+        <el-table-column label="提交时间" width="150">
           <template #default="{ row }">
-            <el-input v-model="row.submitTime" size="small" @blur="saveRow(row)" />
+            <el-date-picker
+              v-model="row.submitTime"
+              type="date"
+              value-format="YYYY-MM-DD"
+              format="YYYY-MM-DD"
+              placeholder="可选"
+              size="small"
+              clearable
+              class="date-picker"
+              @change="saveRow(row)"
+            />
           </template>
         </el-table-column>
+
         <el-table-column label="新收件地址" min-width="200">
           <template #header>
             <span>新收件地址</span>
@@ -294,16 +346,19 @@ onMounted(loadList)
             />
           </template>
         </el-table-column>
+
         <el-table-column label="发出快递单号" width="130">
           <template #default="{ row }">
             <el-input v-model="row.outboundTrackingNo" size="small" @blur="saveRow(row)" />
           </template>
         </el-table-column>
+
         <el-table-column label="备注" min-width="100">
           <template #default="{ row }">
             <el-input v-model="row.remark" size="small" @blur="saveRow(row)" />
           </template>
         </el-table-column>
+
         <el-table-column label="操作" width="72" fixed="right">
           <template #default="{ row }">
             <el-button link type="danger" @click="removeRow(row)">删除</el-button>
@@ -381,5 +436,35 @@ onMounted(loadList)
   background: #fdf6ec;
   border-radius: 3px;
   vertical-align: middle;
+}
+.goods-line + .goods-line {
+  margin-top: 6px;
+}
+.goods-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.goods-pic {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.goods-sku {
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.muted {
+  color: #c0c4cc;
+  font-size: 12px;
+}
+.date-picker {
+  width: 100%;
+}
+.date-picker :deep(.el-input__wrapper) {
+  padding: 0 8px;
 }
 </style>

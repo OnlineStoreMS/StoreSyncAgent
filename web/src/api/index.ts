@@ -323,10 +323,8 @@ export interface ReturnExchangeRecord {
   platform?: string
   sysTid?: string
   shopName?: string
+  goods?: TradeGoods[]
   goodsTitle?: string
-  orderBuyerNick?: string
-  goodsSummary?: string
-  memoNotes?: string
   originalRecipientInfo?: string
   payment?: number
   payTime?: string
@@ -341,10 +339,8 @@ export interface OrderLookup {
   platform?: string
   sysTid?: string
   shopName?: string
-  orderBuyerNick?: string
-  goodsSummary?: string
+  goods?: TradeGoods[]
   goodsTitle?: string
-  memoNotes?: string
   originalRecipientInfo?: string
   payment?: number
   payTime?: string

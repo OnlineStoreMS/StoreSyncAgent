@@ -15,11 +15,8 @@ type OrderLookupView struct {
 	Platform              string            `json:"platform,omitempty"`
 	SysTid                string            `json:"sysTid,omitempty"`
 	ShopName              string            `json:"shopName,omitempty"`
-	OrderBuyerNick        string            `json:"orderBuyerNick,omitempty"`
-	GoodsSummary          string            `json:"goodsSummary,omitempty"`
-	GoodsTitle            string            `json:"goodsTitle,omitempty"`
 	Goods                 []kdzs.TradeGoods `json:"goods,omitempty"`
-	MemoNotes             string            `json:"memoNotes,omitempty"`
+	GoodsTitle            string            `json:"goodsTitle,omitempty"`
 	OriginalRecipientInfo string            `json:"originalRecipientInfo,omitempty"`
 	Payment               float64           `json:"payment,omitempty"`
 	PayTime               string            `json:"payTime,omitempty"`
@@ -67,7 +64,6 @@ func (s *SyncService) LookupOrderByTid(ctx context.Context, platform, tid string
 		}
 		view.Found = true
 		view.Source = "refund"
-		view.OrderBuyerNick = ref.BuyerNick
 		view.ShopName = ref.ShopName
 		view.SysTid = ref.SysTid
 		view.StatusText = ref.AfterSaleStatusText
@@ -76,14 +72,11 @@ func (s *SyncService) LookupOrderByTid(ctx context.Context, platform, tid string
 			goods := make([]kdzs.TradeGoods, 0, len(ref.Goods))
 			for _, g := range ref.Goods {
 				goods = append(goods, kdzs.TradeGoods{
-					Title:   g.Title,
 					SkuName: g.SkuName,
 					PicURL:  g.PicURL,
-					Num:     g.Num,
 				})
 			}
 			view.Goods = goods
-			view.GoodsSummary = joinGoodsSummary(goods)
 		}
 		if ref.SysTid != "" {
 			for _, status := range []string{"shipped", "completed", "wait_send", "wait_audit", kdzs.DefaultTradeStatus()} {
@@ -109,19 +102,16 @@ func (s *SyncService) enrichOrderLookupFromTrade(ctx context.Context, view *Orde
 		return
 	}
 	view.Found = true
-	view.OrderBuyerNick = item.BuyerNick
 	view.ShopName = item.ShopName
 	view.Goods = item.Goods
 	view.Payment = item.Payment
 	view.PayTime = item.PayTime
-	view.StatusText = firstNonEmpty(item.StatusText, kdzs.TradeStatusLabel(item.TradeStatus))
-	view.MemoNotes = joinMemoNotes(item)
+	view.StatusText = kdzs.ResolveOrderStatusText(item.StatusText, item.TradeStatus)
 	if len(item.SysTids) > 0 {
 		view.SysTid = item.SysTids[0]
 	}
 	if len(item.Goods) > 0 {
 		view.GoodsTitle = item.Goods[0].Title
-		view.GoodsSummary = joinGoodsSummary(item.Goods)
 	}
 
 	if len(item.SysTids) > 0 {
@@ -153,43 +143,17 @@ func (s *SyncService) enrichOrderLookupFromTrade(ctx context.Context, view *Orde
 	if view.OriginalRecipientInfo == "" {
 		view.OriginalRecipientInfo = firstNonEmpty(item.FormattedReceiver, formatTradeReceiver(item))
 	}
-}
-
-func joinGoodsSummary(goods []kdzs.TradeGoods) string {
-	parts := make([]string, 0, len(goods))
-	for _, g := range goods {
-		title := strings.TrimSpace(g.Title)
-		sku := strings.TrimSpace(g.SkuName)
-		switch {
-		case title != "" && sku != "":
-			parts = append(parts, fmt.Sprintf("%s（%s）×%d", title, sku, maxInt(g.Num, 1)))
-		case title != "":
-			parts = append(parts, fmt.Sprintf("%s ×%d", title, maxInt(g.Num, 1)))
-		case sku != "":
-			parts = append(parts, sku)
+	// 商品列仅保留 SKU 图与规格
+	if len(view.Goods) > 0 {
+		trimmed := make([]kdzs.TradeGoods, 0, len(view.Goods))
+		for _, g := range view.Goods {
+			trimmed = append(trimmed, kdzs.TradeGoods{
+				PicURL:  g.PicURL,
+				SkuName: g.SkuName,
+			})
 		}
+		view.Goods = trimmed
 	}
-	return strings.Join(parts, "；")
-}
-
-func joinMemoNotes(item *kdzs.TradeListItem) string {
-	if item == nil {
-		return ""
-	}
-	parts := make([]string, 0, 4)
-	if v := strings.TrimSpace(item.BuyerMemo); v != "" {
-		parts = append(parts, "买家留言: "+v)
-	}
-	if v := strings.TrimSpace(item.SellerMemo); v != "" {
-		parts = append(parts, "卖家备注: "+v)
-	}
-	if v := strings.TrimSpace(item.FenFaMemo); v != "" {
-		parts = append(parts, "分发备注: "+v)
-	}
-	if v := strings.TrimSpace(item.PrinterMemo); v != "" {
-		parts = append(parts, "打单备注: "+v)
-	}
-	return strings.Join(parts, "\n")
 }
 
 func formatTradeReceiver(item *kdzs.TradeListItem) string {
@@ -233,13 +197,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func maxInt(v, fallback int) int {
-	if v > 0 {
-		return v
-	}
-	return fallback
 }
 
 func (s *SyncService) ListReturnExchanges() ([]store.ReturnExchangeRecord, error) {

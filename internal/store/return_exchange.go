@@ -12,6 +12,11 @@ import (
 	"time"
 )
 
+type ReturnExchangeGoods struct {
+	PicURL  string `json:"picUrl,omitempty"`
+	SkuName string `json:"skuName,omitempty"`
+}
+
 type ReturnExchangeRecord struct {
 	ID                 string `json:"id"`
 	SeqNo              int    `json:"seqNo,omitempty"`
@@ -27,12 +32,10 @@ type ReturnExchangeRecord struct {
 	Remark             string  `json:"remark,omitempty"`
 	Platform           string  `json:"platform,omitempty"`
 	SysTid             string  `json:"sysTid,omitempty"`
-	ShopName           string  `json:"shopName,omitempty"`
-	GoodsTitle         string  `json:"goodsTitle,omitempty"`
-	OrderBuyerNick     string  `json:"orderBuyerNick,omitempty"`     // 订单买家（自动）
-	GoodsSummary       string  `json:"goodsSummary,omitempty"`       // 商品（自动）
-	MemoNotes          string  `json:"memoNotes,omitempty"`          // 留言备注（自动）
-	OriginalRecipientInfo string `json:"originalRecipientInfo,omitempty"` // 原收件信息（自动）
+	ShopName              string                `json:"shopName,omitempty"`
+	Goods                 []ReturnExchangeGoods `json:"goods,omitempty"`
+	GoodsTitle            string                `json:"goodsTitle,omitempty"`
+	OriginalRecipientInfo string                `json:"originalRecipientInfo,omitempty"`
 	Payment            float64 `json:"payment,omitempty"`
 	PayTime            string  `json:"payTime,omitempty"`
 	StatusText         string  `json:"statusText,omitempty"`
