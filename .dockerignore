@@ -9,7 +9,3 @@ web/dist
 bin
 *.exe
 *.test
-**/*_test.go
-cmd/kdzs-test
-cmd/kdzs-debug
-cmd/refundprobe

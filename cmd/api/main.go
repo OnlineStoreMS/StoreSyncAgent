@@ -16,7 +16,7 @@ import (
 
 func main() {
 	configPath := flag.String("config", "configs/config.yaml", "config file path")
-	webDist := flag.String("web-dist", "web/dist", "static web root (empty to disable)")
+	webDist := flag.String("web-dist", "", "static web root for local dev (empty = API only)")
 	flag.Parse()
 
 	absConfig, err := filepath.Abs(*configPath)

@@ -2,68 +2,70 @@
 
 快递助手（Kdzs）代发同步工具：订单、售后、多账号切换、场景提醒。
 
-## 功能
+## 架构
 
-- 多快递助手账号切换
-- 订单列表 / 解密 / 推厂家
-- 售后场景筛选与 SLA 提醒
-- 工作台首页售后提醒
+| 服务 | 端口 | 说明 |
+|------|------|------|
+| `storesyncagent-api` | 8097 | Go API |
+| `storesyncagent-web` | 5177 | Nginx + Vue，反代 `/api/` → API |
 
 ## 本地开发
 
 ```bash
-# 后端
 cp configs/config.example.yaml configs/config.yaml
-# 编辑 config.yaml 或通过环境变量注入密码（见下方）
+export KDZS_PASSWORD=你的密码   # 或写入 config.yaml（勿提交）
 
+# 后端
 go run ./cmd/api -config configs/config.yaml
 
-# 前端（开发模式，代理 API）
+# 前端（开发代理）
 cd web && npm install && npm run dev
 ```
 
-## 敏感配置
+本地一体化调试 API 静态资源：`go run ./cmd/api -config configs/config.yaml -web-dist web/dist`
 
-**不要**将真实密码写入 Git。`configs/config.yaml` 已在 `.gitignore` 中。
-
-推荐方式：
-
-1. `config.yaml` 中 `accounts.password` 留空
-2. 通过环境变量注入：
-
-| 变量 | 说明 |
-|------|------|
-| `KDZS_PASSWORD` | 所有账号共用密码 |
-| `KDZS_ACCOUNT_{ID}_PASSWORD` | 按账号 ID 单独配置，如 `KDZS_ACCOUNT_ACCOUNT_1_PASSWORD` |
-
-## Docker 本地部署
+## Docker（仓库内）
 
 ```bash
 cp configs/config.example.yaml configs/config.yaml
 cp .env.example .env
-# 编辑 configs/config.yaml（账号手机号等）和 .env（密码）
 
 docker compose up -d --build
 ```
 
-访问 http://localhost:8097
+访问 http://localhost:5177
 
-## 镜像
+## 生产部署（推荐）
 
-GitHub Actions 推送至：
-
-`ghcr.io/onlinestorems/storesyncagent:latest`
-
-拉取运行：
+使用 **deploy** 仓库独立目录：
 
 ```bash
-docker pull ghcr.io/onlinestorems/storesyncagent:latest
-docker run -d --name storesyncagent \
-  -p 8097:8097 \
-  -v $(pwd)/configs/config.yaml:/app/configs/config.yaml:ro \
-  -e KDZS_PASSWORD=your_password \
-  ghcr.io/onlinestorems/storesyncagent:latest
+cd ~/projects/deploy/storesyncagent
+make init-env-acr
+make up-images
 ```
+
+见 [deploy/storesyncagent/README.md](../deploy/storesyncagent/README.md)（若与 deploy 同级）。
+
+## CI → 阿里云 ACR
+
+Workflow：`.github/workflows/docker-push-acr.yml`
+
+推送镜像：
+
+- `storesyncagent-api`
+- `storesyncagent-web`
+
+Organization Secrets（与 ProductCore 共用）：`ALIYUN_ACR_REGISTRY`、`ALIYUN_ACR_NAMESPACE`、`ALIYUN_ACR_USER`、`ALIYUN_ACR_PASSWORD`
+
+## 敏感配置
+
+`configs/config.yaml`、`.env` 已在 `.gitignore`。
+
+| 变量 | 说明 |
+|------|------|
+| `KDZS_PASSWORD` | 所有账号共用密码 |
+| `KDZS_ACCOUNT_{ID}_PASSWORD` | 按账号 ID，如 `KDZS_ACCOUNT_ACCOUNT_1_PASSWORD` |
 
 ## 仓库
 
