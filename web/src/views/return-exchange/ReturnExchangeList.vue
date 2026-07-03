@@ -12,7 +12,8 @@ import {
   type ReturnExchangeRecord,
   type TradeGoods,
 } from '../../api'
-import { formatCopyDate, parseDateValue, parseRecipientAddress } from '../../utils/addressParse'
+import { formatCopyDate, parseDateValue } from '../../utils/addressParse'
+import { copyToClipboard } from '../../utils/clipboard'
 
 const loading = reactive({ list: false, lookup: false, save: false })
 const rows = ref<ReturnExchangeRecord[]>([])
@@ -76,7 +77,6 @@ function blankRow(): ReturnExchangeRecord {
     submitTime: '',
     orderNo: '',
     recipientInfo: '',
-    parsedRecipientInfo: '',
     outboundTrackingNo: '',
     remark: '',
     shopName: '',
@@ -130,12 +130,6 @@ async function saveRow(row: ReturnExchangeRecord) {
   }
 }
 
-async function onRecipientBlur(row: ReturnExchangeRecord) {
-  const raw = row.recipientInfo?.trim() || ''
-  row.parsedRecipientInfo = raw ? parseRecipientAddress(raw) : ''
-  await saveRow(row)
-}
-
 async function removeRow(row: ReturnExchangeRecord) {
   if (!row.id) return
   try {
@@ -151,26 +145,28 @@ async function removeRow(row: ReturnExchangeRecord) {
 
 function buildReshipCopyText(row: ReturnExchangeRecord): string {
   const dateLine = formatCopyDate(new Date())
-  const address =
-    row.parsedRecipientInfo?.trim() ||
-    (row.recipientInfo?.trim() ? parseRecipientAddress(row.recipientInfo) : '')
+  const address = row.recipientInfo?.trim() || ''
   const type = row.afterSaleType?.trim() || '补发'
   const spec = row.spec?.trim() || ''
   const tail = `--- 【${type}】${spec}`
-  return [dateLine, address, tail].filter(Boolean).join('\n')
+  return [dateLine, address, tail].join('\n')
 }
 
 async function copyReshipInfo(row: ReturnExchangeRecord) {
-  const text = buildReshipCopyText(row)
-  if (!text || text === formatCopyDate(new Date()) + '\n--- 【补发】') {
-    ElMessage.warning('请先填写新收件地址和规格')
+  if (!row.recipientInfo?.trim()) {
+    ElMessage.warning('请先填写新收件地址')
     return
   }
-  try {
-    await navigator.clipboard.writeText(text)
+  if (!row.spec?.trim()) {
+    ElMessage.warning('请先填写规格')
+    return
+  }
+  const text = buildReshipCopyText(row)
+  const ok = await copyToClipboard(text)
+  if (ok) {
     ElMessage.success('已复制补发信息')
-  } catch {
-    ElMessage.error('复制失败，请检查浏览器权限')
+  } else {
+    ElMessage.error('复制失败')
   }
 }
 
@@ -225,8 +221,7 @@ onMounted(loadList)
         <div>
           <div class="title">退换货管理</div>
           <div class="desc">
-            填写订单号后自动补充店铺、商品、原收件信息等；新收件地址手填后自动解析；
-            操作列可<strong>复制补发信息</strong>
+            填写订单号后自动补充店铺、商品、原收件信息等；操作列可<strong>复制补发信息</strong>
           </div>
         </div>
         <div class="actions">
@@ -395,11 +390,10 @@ onMounted(loadList)
               v-model="row.recipientInfo"
               size="small"
               type="textarea"
-              placeholder="顾客提供的新地址，失焦自动解析"
+              placeholder="顾客提供的新地址"
               :autosize="{ minRows: 2, maxRows: 4 }"
-              @blur="onRecipientBlur(row)"
+              @blur="saveRow(row)"
             />
-            <div v-if="row.parsedRecipientInfo" class="parsed-preview">{{ row.parsedRecipientInfo }}</div>
           </template>
         </el-table-column>
 
@@ -529,17 +523,6 @@ onMounted(loadList)
 }
 .date-picker :deep(.el-input__wrapper) {
   padding: 0 8px;
-}
-.parsed-preview {
-  margin-top: 4px;
-  padding: 4px 6px;
-  font-size: 11px;
-  line-height: 1.4;
-  color: #67c23a;
-  background: #f0f9eb;
-  border-radius: 4px;
-  white-space: pre-wrap;
-  word-break: break-word;
 }
 .action-col {
   display: flex;
