@@ -261,11 +261,11 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 	case "wait_return":
 		return item.AfterSaleStatus == "WAIT_BUYER_RETURN_ITEM"
 	case "refund_success":
-		return item.AfterSaleStatus == "REFUND_SUCCESS"
+		return item.AfterSaleStatus == "REFUND_SUCCESS" && HasReturnLogistics(item)
 	case "seller_refuse":
 		return IsSellerRefuseStatus(item.AfterSaleStatus)
 	case "refund_close_with_sid":
-		return item.AfterSaleStatus == "REFUND_CLOSE" && strings.TrimSpace(item.Sid) != ""
+		return item.AfterSaleStatus == "REFUND_CLOSE" && HasReturnLogistics(item)
 	default:
 		return true
 	}
@@ -273,6 +273,10 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 
 func IsSellerRefuseStatus(status string) bool {
 	return status == "SELLER_REFUSAL_REFUND" || status == "SELLER_REFUSE"
+}
+
+func HasReturnLogistics(item RefundItem) bool {
+	return strings.TrimSpace(item.Sid) != ""
 }
 
 // SellerRefuseQueryStatus 快递助手 queryRefund 支持的卖家拒绝状态筛选值。

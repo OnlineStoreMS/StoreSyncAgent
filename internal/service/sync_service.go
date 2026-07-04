@@ -778,7 +778,7 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 		if err != nil {
 			return nil, err
 		}
-		return items, nil
+		return filterRefundsWithReturnLogistics(items), nil
 
 	case "seller_refuse":
 		q := base
@@ -798,12 +798,7 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 		if err != nil {
 			return nil, err
 		}
-		filtered := make([]kdzs.RefundItem, 0, len(items))
-		for _, item := range items {
-			if strings.TrimSpace(item.Sid) != "" {
-				filtered = append(filtered, item)
-			}
-		}
+		filtered := filterRefundsWithReturnLogistics(items)
 		return filtered, nil
 	}
 
@@ -1003,6 +998,16 @@ func filterRefundsByScenario(items []kdzs.RefundItem, scenario string) []kdzs.Re
 	return out
 }
 
+func filterRefundsWithReturnLogistics(items []kdzs.RefundItem) []kdzs.RefundItem {
+	out := make([]kdzs.RefundItem, 0, len(items))
+	for _, item := range items {
+		if kdzs.HasReturnLogistics(item) {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q RefundQuery) (*RefundStatsView, error) {
 	base := s.toRefundQuery(q)
 	base.PageNo = 1
@@ -1053,15 +1058,15 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 
 	stats.WaitBuyerReturn = countStatus("WAIT_BUYER_RETURN_ITEM")
 	stats.SellerRefuse = countStatus(kdzs.SellerRefuseQueryStatus())
-	stats.RefundSuccess = countStatus("REFUND_SUCCESS")
+	successQ := base
+	successQ.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
+	if successItems, _, err := s.session.QueryAllRefunds(ctx, successQ); err == nil {
+		stats.RefundSuccess = len(filterRefundsWithReturnLogistics(successItems))
+	}
 	closeQ := base
 	closeQ.AfterSaleStatusList = []string{"REFUND_CLOSE"}
 	if closeItems, _, err := s.session.QueryAllRefunds(ctx, closeQ); err == nil {
-		for _, item := range closeItems {
-			if strings.TrimSpace(item.Sid) != "" {
-				stats.RefundCloseWithSid++
-			}
-		}
+		stats.RefundCloseWithSid = len(filterRefundsWithReturnLogistics(closeItems))
 	}
 
 	// 待确认收货：拉全量并查物流，统计签收/待取件（与场景 Tab 一致）。
