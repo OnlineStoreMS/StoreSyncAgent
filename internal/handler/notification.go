@@ -43,6 +43,14 @@ func (h *Handler) TestNotification(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+func (h *Handler) TestBarcodeNotification(c *gin.Context) {
+	if err := h.svc.TestBarcodeNotification(c.Request.Context()); err != nil {
+		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (h *Handler) RunNotification(c *gin.Context) {
 	result, err := h.svc.RunNotificationPoll(c.Request.Context())
 	if err != nil {

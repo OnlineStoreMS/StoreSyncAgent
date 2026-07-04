@@ -402,6 +402,7 @@ export interface NotificationState {
   lastRunOk?: boolean
   lastError?: string
   lastSentCount?: number
+  lastBarcodeError?: string
 }
 
 export interface NotificationView {
@@ -426,8 +427,13 @@ export async function testNotification(text?: string) {
   return data
 }
 
+export async function testBarcodeNotification() {
+  const { data } = await http.post<{ ok: boolean }>('/notifications/test-barcode')
+  return data
+}
+
 export async function runNotification() {
-  const { data } = await http.post<{ sent: number; skipped: number; error?: string }>('/notifications/run')
+  const { data } = await http.post<{ sent: number; skipped: number; barcodeWarnings?: number; lastBarcodeError?: string; error?: string }>('/notifications/run')
   return data
 }
 

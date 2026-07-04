@@ -61,9 +61,11 @@ type NotificationConfigView struct {
 }
 
 type NotificationRunResult struct {
-	Sent    int    `json:"sent"`
-	Skipped int    `json:"skipped"`
-	Error   string `json:"error,omitempty"`
+	Sent             int    `json:"sent"`
+	Skipped          int    `json:"skipped"`
+	BarcodeWarnings  int    `json:"barcodeWarnings,omitempty"`
+	LastBarcodeError string `json:"lastBarcodeError,omitempty"`
+	Error            string `json:"error,omitempty"`
 }
 
 func (s *SyncService) SupportedNotificationScenarios() []ScenarioOption {
@@ -181,6 +183,33 @@ func (s *SyncService) TestNotification(ctx context.Context, text string) error {
 	return s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card)
 }
 
+func (s *SyncService) TestBarcodeNotification(ctx context.Context) error {
+	data, err := s.notificationStore.Load()
+	if err != nil {
+		return err
+	}
+	cfg := data.Config
+	if cfg.WebhookURL == "" {
+		return fmt.Errorf("请先配置 Webhook 地址")
+	}
+	if cfg.AppID == "" || cfg.AppSecret == "" {
+		return fmt.Errorf("请先配置飞书应用 ID 和 App Secret")
+	}
+	const sampleSid = "YT1234567890"
+	card := feishu.InteractiveCard{
+		Title:    "StoreSyncAgent · 条形码测试",
+		Template: "blue",
+		Markdown: fmt.Sprintf("**退货物流：** %s\n\n<font color='grey'>若下方出现条形码，说明飞书应用配置正确。</font>", escapeLarkMD(sampleSid)),
+	}
+	if err := s.attachLogisticsBarcode(ctx, cfg, &card, sampleSid); err != nil {
+		return fmt.Errorf("条形码上传失败: %w", err)
+	}
+	if card.FooterImgKey == "" {
+		return fmt.Errorf("条形码上传失败: 未获得 image_key")
+	}
+	return s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card)
+}
+
 func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRunResult, error) {
 	data, err := s.notificationStore.Load()
 	if err != nil {
@@ -191,33 +220,34 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 	now := time.Now()
 	runAt := now.Format("2006-01-02 15:04:05")
 
-	updateState := func(ok bool, sent int, errMsg string) {
+	updateState := func(ok bool, sent int, errMsg, barcodeErr string) {
 		_ = s.notificationStore.UpdateState(func(st *store.NotificationState) error {
 			st.LastRunAt = runAt
 			st.LastRunOK = ok
 			st.LastError = errMsg
 			st.LastSentCount = sent
+			st.LastBarcodeError = barcodeErr
 			return nil
 		})
 	}
 
 	if !cfg.Enabled {
-		updateState(true, 0, "")
+		updateState(true, 0, "", "")
 		return result, nil
 	}
 	if cfg.WebhookURL == "" {
 		err := fmt.Errorf("webhook url is empty")
-		updateState(false, 0, err.Error())
+		updateState(false, 0, err.Error(), "")
 		return nil, err
 	}
 	if len(cfg.Scenarios) == 0 {
-		updateState(true, 0, "")
+		updateState(true, 0, "", "")
 		return result, nil
 	}
 
 	accountIDs, err := s.resolveNotificationAccountIDs(cfg)
 	if err != nil {
-		updateState(false, 0, err.Error())
+		updateState(false, 0, err.Error(), "")
 		return nil, err
 	}
 
@@ -234,6 +264,8 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 
 	sent := 0
 	skipped := 0
+	barcodeWarnings := 0
+	var lastBarcodeError string
 	var sendErr error
 	notified := data.State.Notified
 	if notified == nil {
@@ -261,7 +293,10 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 					continue
 				}
 				card := buildRefundNotificationCard(accountName, scenario, item)
-				s.attachLogisticsBarcode(ctx, cfg, &card, item.Sid)
+				if err := s.attachLogisticsBarcode(ctx, cfg, &card, item.Sid); err != nil {
+					barcodeWarnings++
+					lastBarcodeError = err.Error()
+				}
 				if err := s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card); err != nil {
 					sendErr = err
 					break
@@ -291,11 +326,13 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 
 	result.Sent = sent
 	result.Skipped = skipped
+	result.BarcodeWarnings = barcodeWarnings
+	result.LastBarcodeError = lastBarcodeError
 	if sendErr != nil {
-		updateState(false, sent, sendErr.Error())
+		updateState(false, sent, sendErr.Error(), lastBarcodeError)
 		return result, sendErr
 	}
-	updateState(true, sent, "")
+	updateState(true, sent, "", lastBarcodeError)
 	return result, nil
 }
 
@@ -388,17 +425,21 @@ func buildRefundNotificationCard(accountName, scenario string, item kdzs.RefundI
 	}
 }
 
-func (s *SyncService) attachLogisticsBarcode(ctx context.Context, cfg store.NotificationConfig, card *feishu.InteractiveCard, sid string) {
+func (s *SyncService) attachLogisticsBarcode(ctx context.Context, cfg store.NotificationConfig, card *feishu.InteractiveCard, sid string) error {
 	sid = strings.TrimSpace(sid)
-	if sid == "" || cfg.AppID == "" || cfg.AppSecret == "" {
-		return
+	if sid == "" {
+		return nil
+	}
+	if cfg.AppID == "" || cfg.AppSecret == "" {
+		return fmt.Errorf("未配置飞书应用凭证，无法生成条形码")
 	}
 	key, err := s.feishuClient.UploadBarcodeImage(ctx, cfg.AppID, cfg.AppSecret, sid)
 	if err != nil {
-		return
+		return err
 	}
 	card.FooterImgKey = key
 	card.FooterImgAlt = sid
+	return nil
 }
 
 func scenarioCardTemplate(scenario string, item kdzs.RefundItem) string {

@@ -38,6 +38,7 @@ func Setup(h *handler.Handler, webDist string) *gin.Engine {
 		api.GET("/notifications", h.GetNotification)
 		api.PUT("/notifications", h.SaveNotification)
 		api.POST("/notifications/test", h.TestNotification)
+		api.POST("/notifications/test-barcode", h.TestBarcodeNotification)
 		api.POST("/notifications/run", h.RunNotification)
 		api.POST("/notifications/reset-state", h.ResetNotificationState)
 	}

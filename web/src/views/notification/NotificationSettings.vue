@@ -8,6 +8,7 @@ import {
   runNotification,
   saveNotification,
   testNotification,
+  testBarcodeNotification,
   type KdzsAccount,
   type NotificationConfig,
   type NotificationState,
@@ -15,7 +16,7 @@ import {
 } from '../../api'
 import { formatAccountTitle } from '../../utils/account'
 
-const loading = reactive({ load: false, save: false, test: false, run: false, reset: false })
+const loading = reactive({ load: false, save: false, test: false, testBarcode: false, run: false, reset: false })
 const scenarioOptions = ref<NotificationScenarioOption[]>([])
 const accountOptions = ref<KdzsAccount[]>([])
 const state = ref<NotificationState>({})
@@ -87,11 +88,29 @@ async function onTest() {
   }
 }
 
+async function onTestBarcode() {
+  loading.testBarcode = true
+  try {
+    await testBarcodeNotification()
+    ElMessage.success('条形码测试卡片已发送')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || e.message || '条形码测试失败')
+  } finally {
+    loading.testBarcode = false
+  }
+}
+
 async function onRunNow() {
   loading.run = true
   try {
     const result = await runNotification()
-    ElMessage.success(`检查完成：推送 ${result.sent} 条，跳过 ${result.skipped} 条`)
+    let msg = `检查完成：推送 ${result.sent} 条，跳过 ${result.skipped} 条`
+    if (result.lastBarcodeError) {
+      msg += `；条形码异常：${result.lastBarcodeError}`
+      ElMessage.warning(msg)
+    } else {
+      ElMessage.success(msg)
+    }
     await load()
   } catch (e: any) {
     const result = e?.response?.data?.result
@@ -149,6 +168,7 @@ onMounted(load)
           <div class="actions">
             <el-button :icon="Refresh" @click="load">刷新</el-button>
             <el-button :loading="loading.test" @click="onTest">测试推送</el-button>
+            <el-button :loading="loading.testBarcode" @click="onTestBarcode">测试条形码</el-button>
             <el-button type="warning" plain :loading="loading.run" @click="onRunNow">立即检查</el-button>
             <el-button type="primary" :loading="loading.save" @click="onSave">保存配置</el-button>
           </div>
@@ -188,7 +208,7 @@ onMounted(load)
             show-password
             :placeholder="form.appSecretSet ? '已配置，留空则不修改' : '企业自建应用 App Secret'"
           />
-          <div class="field-tip muted">配置后，有退货物流单号的通知会在卡片底部附带 Code128 条形码；需开通「获取与上传图片或文件资源」权限</div>
+          <div class="field-tip muted">需开启应用「机器人」能力，并开通「获取与上传图片或文件资源」权限且发布版本；有退货物流单号时卡片底部显示 Code128 条形码</div>
         </el-form-item>
         <el-form-item label="定时拉取">
           <div class="inline-field">
@@ -253,6 +273,7 @@ onMounted(load)
         </el-descriptions-item>
         <el-descriptions-item label="上次推送">{{ state.lastSentCount ?? '—' }} 条</el-descriptions-item>
         <el-descriptions-item label="错误信息">{{ state.lastError || '—' }}</el-descriptions-item>
+        <el-descriptions-item label="条形码" :span="2">{{ state.lastBarcodeError || '—' }}</el-descriptions-item>
       </el-descriptions>
       <div class="status-tip muted">
         <el-icon><Promotion /></el-icon>

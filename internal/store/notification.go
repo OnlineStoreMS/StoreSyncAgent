@@ -27,8 +27,9 @@ type NotificationState struct {
 	LastRunAt     string            `json:"lastRunAt,omitempty"`
 	LastRunOK     bool              `json:"lastRunOk"`
 	LastError     string            `json:"lastError,omitempty"`
-	LastSentCount int               `json:"lastSentCount,omitempty"`
-	Notified      map[string]string `json:"notified,omitempty"`
+	LastSentCount   int               `json:"lastSentCount,omitempty"`
+	LastBarcodeError string           `json:"lastBarcodeError,omitempty"`
+	Notified        map[string]string `json:"notified,omitempty"`
 }
 
 type NotificationData struct {
