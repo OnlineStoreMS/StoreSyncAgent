@@ -15,6 +15,7 @@ const (
 	FXGUrgentCriticalHours          = 4
 	FXGUrgentWarningHours           = 12
 	FXGUrgentImminentMinutes        = 30
+	AfterSaleTypeReturnRefund       = 2 // 退货退款
 )
 
 type RefundSLA struct {
@@ -261,7 +262,7 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 	case "wait_return":
 		return item.AfterSaleStatus == "WAIT_BUYER_RETURN_ITEM"
 	case "refund_success":
-		return item.AfterSaleStatus == "REFUND_SUCCESS" && HasReturnLogistics(item)
+		return item.AfterSaleStatus == "REFUND_SUCCESS" && IsReturnRefundType(item)
 	case "seller_refuse":
 		return IsSellerRefuseStatus(item.AfterSaleStatus)
 	case "refund_close_with_sid":
@@ -277,6 +278,10 @@ func IsSellerRefuseStatus(status string) bool {
 
 func HasReturnLogistics(item RefundItem) bool {
 	return strings.TrimSpace(item.Sid) != ""
+}
+
+func IsReturnRefundType(item RefundItem) bool {
+	return item.AfterSaleType == AfterSaleTypeReturnRefund
 }
 
 // SellerRefuseQueryStatus 快递助手 queryRefund 支持的卖家拒绝状态筛选值。

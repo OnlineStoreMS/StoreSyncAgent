@@ -78,11 +78,11 @@ func TestMatchRefundScenarioExtended(t *testing.T) {
 	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "WAIT_BUYER_RETURN_ITEM"}, "wait_return") {
 		t.Fatal("wait_return")
 	}
-	if MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_SUCCESS"}, "refund_success") {
-		t.Fatal("refund_success without sid should not match")
+	if MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_SUCCESS", AfterSaleType: 1}, "refund_success") {
+		t.Fatal("refund only success should not match")
 	}
-	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_SUCCESS", Sid: "YT123"}, "refund_success") {
-		t.Fatal("refund_success with sid should match")
+	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_SUCCESS", AfterSaleType: 2}, "refund_success") {
+		t.Fatal("return refund success should match")
 	}
 	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "SELLER_REFUSAL_REFUND"}, "seller_refuse") {
 		t.Fatal("seller_refuse")

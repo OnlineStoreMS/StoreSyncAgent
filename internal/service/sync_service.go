@@ -773,12 +773,12 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 	case "refund_success":
 		q := base
 		q.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
-		q.AfterSaleTypeList = nil
+		q.AfterSaleTypeList = []int{kdzs.AfterSaleTypeReturnRefund}
 		items, _, err := s.session.QueryAllRefunds(ctx, q)
 		if err != nil {
 			return nil, err
 		}
-		return filterRefundsWithReturnLogistics(items), nil
+		return items, nil
 
 	case "seller_refuse":
 		q := base
@@ -966,6 +966,7 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 			rq.AfterSaleStatusList = []string{"WAIT_BUYER_RETURN_ITEM"}
 		case "refund_success":
 			rq.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
+			rq.AfterSaleTypeList = []int{kdzs.AfterSaleTypeReturnRefund}
 		case "seller_refuse":
 			rq.AfterSaleStatusList = []string{kdzs.SellerRefuseQueryStatus()}
 		case "refund_close_with_sid":
@@ -1060,8 +1061,9 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 	stats.SellerRefuse = countStatus(kdzs.SellerRefuseQueryStatus())
 	successQ := base
 	successQ.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
-	if successItems, _, err := s.session.QueryAllRefunds(ctx, successQ); err == nil {
-		stats.RefundSuccess = len(filterRefundsWithReturnLogistics(successItems))
+	successQ.AfterSaleTypeList = []int{kdzs.AfterSaleTypeReturnRefund}
+	if res, err := s.session.QueryRefunds(ctx, successQ); err == nil {
+		stats.RefundSuccess = res.Total
 	}
 	closeQ := base
 	closeQ.AfterSaleStatusList = []string{"REFUND_CLOSE"}

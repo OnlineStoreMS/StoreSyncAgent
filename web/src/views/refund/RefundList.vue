@@ -51,7 +51,7 @@ const scenarioTabs = [
   { key: 'pickup_pending', label: '驿站待取件' },
   { key: 'seller_refuse', label: '卖家拒绝退款' },
   { key: 'refund_close_with_sid', label: '退款关闭(有物流)' },
-  { key: 'refund_success', label: '退款成功(有物流)' },
+  { key: 'refund_success', label: '退货退款·退款成功' },
   { key: 'urgent', label: '时效紧迫' },
 ]
 
@@ -119,7 +119,7 @@ const statCards = computed(() => [
   { label: '待买家退货', value: refundStats.value?.waitBuyerReturn, color: '#909399', scenario: 'wait_return' },
   { label: '卖家拒绝退款', value: refundStats.value?.sellerRefuse, color: '#e6a23c', scenario: 'seller_refuse' },
   { label: '退款关闭(有物流)', value: refundStats.value?.refundCloseWithSid, color: '#909399', scenario: 'refund_close_with_sid' },
-  { label: '退款成功(有物流)', value: refundStats.value?.refundSuccess, color: '#67c23a', scenario: 'refund_success' },
+  { label: '退货退款·退款成功', value: refundStats.value?.refundSuccess, color: '#67c23a', scenario: 'refund_success' },
   { label: '时效紧迫', value: refundStats.value?.urgent, color: '#f56c6c', highlight: true, scenario: 'urgent' },
 ])
 
