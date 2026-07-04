@@ -45,6 +45,12 @@ const router = createRouter({
           component: () => import('../views/return-exchange/ReturnExchangeList.vue'),
           meta: { title: '退换货管理' },
         },
+        {
+          path: 'notifications',
+          name: 'NotificationSettings',
+          component: () => import('../views/notification/NotificationSettings.vue'),
+          meta: { title: '通知管理' },
+        },
       ],
     },
   ],

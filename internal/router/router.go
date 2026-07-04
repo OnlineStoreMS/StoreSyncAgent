@@ -35,6 +35,10 @@ func Setup(h *handler.Handler, webDist string) *gin.Engine {
 		api.POST("/return-exchanges", h.CreateReturnExchange)
 		api.PUT("/return-exchanges/:id", h.UpdateReturnExchange)
 		api.DELETE("/return-exchanges/:id", h.DeleteReturnExchange)
+		api.GET("/notifications", h.GetNotification)
+		api.PUT("/notifications", h.SaveNotification)
+		api.POST("/notifications/test", h.TestNotification)
+		api.POST("/notifications/run", h.RunNotification)
 	}
 
 	mountWebUI(r, webDist)

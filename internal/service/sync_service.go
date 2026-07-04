@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"storesyncagent/internal/config"
+	"storesyncagent/internal/feishu"
 	"storesyncagent/internal/kdzs"
 	"storesyncagent/internal/store"
 )
@@ -21,6 +22,8 @@ type SyncService struct {
 	mu                  sync.Mutex
 	activeAccountID     string
 	returnExchangeStore *store.ReturnExchangeStore
+	notificationStore   *store.NotificationStore
+	feishuClient        *feishu.Client
 }
 
 func NewSyncService(cfg *config.Config) (*SyncService, error) {
@@ -35,12 +38,19 @@ func NewSyncService(cfg *config.Config) (*SyncService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("return exchange store: %w", err)
 	}
+	notifyPath := filepath.Join(dataDir, "notifications.json")
+	notifyStore, err := store.NewNotificationStore(notifyPath)
+	if err != nil {
+		return nil, fmt.Errorf("notification store: %w", err)
+	}
 	svc := &SyncService{
 		cfg:                 cfg,
 		client:              client,
 		session:             kdzs.NewSession(client),
 		activeAccountID:     cfg.Kdzs.ActiveAccountID(),
 		returnExchangeStore: rexStore,
+		notificationStore:   notifyStore,
+		feishuClient:        feishu.NewClient(),
 	}
 	return svc, nil
 }

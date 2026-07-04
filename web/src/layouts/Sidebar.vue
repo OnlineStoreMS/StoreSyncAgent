@@ -19,6 +19,7 @@ const menuItems = [
 const afterSaleItems = [
   { path: '/refunds', title: '售后列表' },
   { path: '/return-exchanges', title: '退换货管理' },
+  { path: '/notifications', title: '通知管理' },
 ]
 
 const logoText = computed(() => (collapsed.value ? 'SSA' : 'StoreSyncAgent'))

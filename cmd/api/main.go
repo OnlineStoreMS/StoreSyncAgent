@@ -9,6 +9,7 @@ import (
 	"storesyncagent/internal/config"
 	"storesyncagent/internal/handler"
 	"storesyncagent/internal/router"
+	"storesyncagent/internal/scheduler"
 	"storesyncagent/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -40,6 +41,8 @@ func main() {
 		log.Fatal(err)
 	}
 	h := handler.New(svc)
+	notifyScheduler := scheduler.NewNotificationScheduler(svc)
+	notifyScheduler.Start()
 	engine := router.Setup(h, *webDist)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)

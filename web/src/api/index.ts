@@ -374,3 +374,52 @@ export async function lookupOrder(params: { orderNo: string; platform?: string }
   const { data } = await http.get<OrderLookup>('/orders/lookup', { params })
   return data
 }
+
+export interface NotificationScenarioOption {
+  key: string
+  label: string
+}
+
+export interface NotificationConfig {
+  enabled: boolean
+  webhookUrl: string
+  secret?: string
+  secretSet?: boolean
+  platform: string
+  pollIntervalMinutes: number
+  dateRangeDays: number
+  scenarios: string[]
+}
+
+export interface NotificationState {
+  lastRunAt?: string
+  lastRunOk?: boolean
+  lastError?: string
+  lastSentCount?: number
+}
+
+export interface NotificationView {
+  config: NotificationConfig
+  state: NotificationState
+  scenarios: NotificationScenarioOption[]
+}
+
+export async function getNotification() {
+  const { data } = await http.get<NotificationView>('/notifications')
+  return data
+}
+
+export async function saveNotification(body: NotificationConfig) {
+  const { data } = await http.put<NotificationView>('/notifications', body)
+  return data
+}
+
+export async function testNotification(text?: string) {
+  const { data } = await http.post<{ ok: boolean }>('/notifications/test', { text })
+  return data
+}
+
+export async function runNotification() {
+  const { data } = await http.post<{ sent: number; skipped: number; error?: string }>('/notifications/run')
+  return data
+}
