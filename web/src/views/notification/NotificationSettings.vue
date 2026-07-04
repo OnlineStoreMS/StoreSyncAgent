@@ -7,13 +7,16 @@ import {
   runNotification,
   saveNotification,
   testNotification,
+  type KdzsAccount,
   type NotificationConfig,
   type NotificationState,
   type NotificationScenarioOption,
 } from '../../api'
+import { formatAccountTitle } from '../../utils/account'
 
 const loading = reactive({ load: false, save: false, test: false, run: false })
 const scenarioOptions = ref<NotificationScenarioOption[]>([])
+const accountOptions = ref<KdzsAccount[]>([])
 const state = ref<NotificationState>({})
 const secretInput = ref('')
 
@@ -24,6 +27,7 @@ const form = reactive<NotificationConfig>({
   pollIntervalMinutes: 15,
   dateRangeDays: 30,
   scenarios: [],
+  accountIds: [],
 })
 
 async function load() {
@@ -32,8 +36,10 @@ async function load() {
     const data = await getNotification()
     Object.assign(form, data.config)
     form.scenarios = [...(data.config.scenarios || [])]
+    form.accountIds = [...(data.config.accountIds || [])]
     state.value = data.state || {}
     scenarioOptions.value = data.scenarios || []
+    accountOptions.value = data.accounts || []
     secretInput.value = ''
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error || e.message || '加载失败')
@@ -52,6 +58,7 @@ async function onSave() {
     const data = await saveNotification(payload)
     Object.assign(form, data.config)
     form.scenarios = [...(data.config.scenarios || [])]
+    form.accountIds = [...(data.config.accountIds || [])]
     state.value = data.state || {}
     secretInput.value = ''
     ElMessage.success('已保存')
@@ -157,6 +164,16 @@ onMounted(load)
             <el-option label="抖店" value="FXG" />
           </el-select>
         </el-form-item>
+        <el-form-item label="通知账号">
+          <div class="account-field">
+            <el-checkbox-group v-model="form.accountIds">
+              <el-checkbox v-for="acc in accountOptions" :key="acc.id" :label="acc.id">
+                {{ formatAccountTitle(acc) }}
+              </el-checkbox>
+            </el-checkbox-group>
+            <div class="field-tip muted">不勾选任何账号时，默认扫描 config 中的全部快递助手账号</div>
+          </div>
+        </el-form-item>
         <el-form-item label="通知场景">
           <el-checkbox-group v-model="form.scenarios">
             <el-checkbox v-for="opt in scenarioOptions" :key="opt.key" :label="opt.key">
@@ -183,7 +200,7 @@ onMounted(load)
       </el-descriptions>
       <div class="status-tip muted">
         <el-icon><Promotion /></el-icon>
-        同一场景下同一售后单只推送一次；「时效紧迫」在 urgency 升级（warning → critical → expired）时会再次提醒。
+        同一账号下同一场景的同一售后单只推送一次；「时效紧迫」在 urgency 升级时会再次提醒。多账号去重互不影响。
       </div>
     </el-card>
   </div>
@@ -215,6 +232,15 @@ onMounted(load)
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+.account-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.field-tip {
+  font-size: 12px;
+  line-height: 1.5;
 }
 .status-tip {
   display: flex;

@@ -389,6 +389,8 @@ export interface NotificationConfig {
   pollIntervalMinutes: number
   dateRangeDays: number
   scenarios: string[]
+  /** 空数组表示全部 config 中的 accounts */
+  accountIds?: string[]
 }
 
 export interface NotificationState {
@@ -402,6 +404,7 @@ export interface NotificationView {
   config: NotificationConfig
   state: NotificationState
   scenarios: NotificationScenarioOption[]
+  accounts: KdzsAccount[]
 }
 
 export async function getNotification() {

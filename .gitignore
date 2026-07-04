@@ -1,7 +1,10 @@
 configs/config.yaml
 .env
 .env.local
-data/return-exchanges.json
+# data 目录运行时数据（Docker 卷 / 本地持久化），seed 模板仍提交
+data/*
+!data/*.seed.json
+!data/.gitkeep
 show/
 *.exe
 *.test

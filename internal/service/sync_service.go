@@ -83,6 +83,33 @@ func (s *SyncService) ensureLogin(ctx context.Context) error {
 	return s.session.EnsureLogin(ctx, acc.Mobile, acc.Password)
 }
 
+// switchSessionAccount 切换 KDZS 会话到指定账号，不改变 Web 当前选中的 activeAccountID。
+func (s *SyncService) switchSessionAccount(ctx context.Context, accountID string) (config.KdzsAccount, error) {
+	acc, ok := s.cfg.Kdzs.AccountByID(accountID)
+	if !ok {
+		return config.KdzsAccount{}, fmt.Errorf("account %s not found", accountID)
+	}
+	if acc.Password == "" {
+		acc.Password = s.cfg.Kdzs.Password
+	}
+	if acc.Mobile == "" {
+		return config.KdzsAccount{}, fmt.Errorf("account %s mobile is empty", accountID)
+	}
+	if err := s.session.SwitchAccount(ctx, acc.ID, acc.Name, acc.Role, acc.Mobile, acc.Password); err != nil {
+		return config.KdzsAccount{}, err
+	}
+	return acc, nil
+}
+
+func (s *SyncService) restoreSessionAccount(ctx context.Context, accountID string) {
+	if accountID == "" {
+		return
+	}
+	if _, err := s.switchSessionAccount(ctx, accountID); err != nil {
+		// best effort restore after notification poll
+	}
+}
+
 type ShopView struct {
 	ID           int64  `json:"id"`
 	Platform     string `json:"platform"`

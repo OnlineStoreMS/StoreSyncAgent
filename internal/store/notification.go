@@ -18,6 +18,7 @@ type NotificationConfig struct {
 	PollIntervalMinutes int      `json:"pollIntervalMinutes,omitempty"`
 	DateRangeDays       int      `json:"dateRangeDays,omitempty"`
 	Scenarios           []string `json:"scenarios,omitempty"`
+	AccountIDs          []string `json:"accountIds,omitempty"` // 空=全部 accounts
 }
 
 type NotificationState struct {
