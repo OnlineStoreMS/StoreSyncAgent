@@ -143,6 +143,7 @@ func parseLogisticsDetail(resp *logisticsDetailResponse) *LogisticsDetail {
 		detail.IsInbound = true
 		detail.IsPickupPending = true
 	}
+	reconcileSignedVsPickupPending(detail)
 	return detail
 }
 
@@ -153,7 +154,44 @@ func isSignedStatus(status, subStatus, desc string) bool {
 	if _, ok := signedStatuses[strings.ToUpper(subStatus)]; ok {
 		return true
 	}
-	return strings.Contains(desc, "签收") && !strings.Contains(desc, "待签收")
+	return isDescSigned(desc)
+}
+
+// isDescSigned 轨迹描述中的签收语义（排除派件中「准备签收」等未签收状态）。
+func isDescSigned(desc string) bool {
+	if !strings.Contains(desc, "签收") {
+		return false
+	}
+	for _, neg := range []string{"待签收", "准备签收", "即将签收", "等候签收"} {
+		if strings.Contains(desc, neg) {
+			return false
+		}
+	}
+	return true
+}
+
+// reconcileSignedVsPickupPending 最新轨迹为驿站/代收待取时，覆盖较早的误签收标记。
+func reconcileSignedVsPickupPending(detail *LogisticsDetail) {
+	if detail == nil || !detail.IsPickupPending || !detail.IsSigned {
+		return
+	}
+	if detail.InboundTime != "" && detail.SignTime != "" && detail.InboundTime >= detail.SignTime {
+		detail.IsSigned = false
+		detail.SignTime = ""
+		return
+	}
+	if len(detail.TraceList) == 0 {
+		return
+	}
+	latest := detail.TraceList[len(detail.TraceList)-1]
+	if !isPickupPendingTrace(latest.LogisticsStatus, latest.SubLogisticsStatus, latest.Desc) {
+		return
+	}
+	if isDescSigned(latest.Desc) {
+		return
+	}
+	detail.IsSigned = false
+	detail.SignTime = ""
 }
 
 func isAcceptStatus(status, subStatus, desc string) bool {
@@ -226,6 +264,9 @@ func isInboundWaitingPickup(desc string) bool {
 		return true
 	}
 	if strings.Contains(d, "保管") && (strings.Contains(d, "请") || strings.Contains(d, "取件") || strings.Contains(d, "领取")) {
+		return true
+	}
+	if strings.Contains(d, "已代收") {
 		return true
 	}
 	if (strings.Contains(d, "到达") || strings.Contains(d, "送达")) &&
