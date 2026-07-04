@@ -227,8 +227,8 @@ onMounted(async () => {
             </div>
             <div class="refund-sub muted">
               近 30 天申请 · 待处理 {{ pendingRefundTotal }} 单
-              <template v-if="refundStats && (refundStats.expired || refundStats.critical)">
-                · 已超时 {{ refundStats.expired || 0 }} · 4h 内到期 {{ refundStats.critical || 0 }}
+              <template v-if="refundStats && (refundStats.expired || refundStats.imminent || refundStats.critical)">
+                · 已超时 {{ refundStats.expired || 0 }} · 30m 内 {{ refundStats.imminent || 0 }} · 4h 内 {{ refundStats.critical || 0 }}
               </template>
             </div>
           </div>

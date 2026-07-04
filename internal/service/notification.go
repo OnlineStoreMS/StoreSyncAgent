@@ -319,7 +319,7 @@ func refundDateRange(days int) (string, string) {
 
 func notificationKey(accountID string, item kdzs.RefundItem, scenario string) string {
 	if scenario == "urgent" && item.SLA != nil && item.SLA.Urgency != "" {
-		return accountID + ":" + item.RefundID + ":urgent:" + item.SLA.Urgency
+		return fmt.Sprintf("%s:%s:urgent:%s", accountID, item.RefundID, item.SLA.Urgency)
 	}
 	return accountID + ":" + item.RefundID + ":" + scenario
 }
@@ -386,7 +386,7 @@ func buildRefundNotificationCard(accountName, scenario string, item kdzs.RefundI
 func scenarioCardTemplate(scenario string, item kdzs.RefundItem) string {
 	if scenario == "urgent" && item.SLA != nil {
 		switch item.SLA.Urgency {
-		case "expired", "critical":
+		case "expired", "imminent", "critical":
 			return "red"
 		case "warning":
 			return "orange"
@@ -412,7 +412,7 @@ func scenarioCardTemplate(scenario string, item kdzs.RefundItem) string {
 
 func urgencyColor(urgency string) string {
 	switch urgency {
-	case "expired", "critical":
+	case "expired", "imminent", "critical":
 		return "red"
 	case "warning":
 		return "orange"

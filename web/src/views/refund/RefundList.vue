@@ -73,6 +73,7 @@ const typeOptions = [
 const urgencyType = (urgency?: string) => {
   switch (urgency) {
     case 'expired':
+    case 'imminent':
     case 'critical':
       return 'danger'
     case 'warning':
@@ -81,6 +82,23 @@ const urgencyType = (urgency?: string) => {
       return 'success'
     default:
       return 'info'
+  }
+}
+
+const urgencyLabel = (urgency?: string) => {
+  switch (urgency) {
+    case 'expired':
+      return '已超时'
+    case 'imminent':
+      return '极急'
+    case 'critical':
+      return '紧急'
+    case 'warning':
+      return '临近'
+    case 'normal':
+      return '正常'
+    default:
+      return '—'
   }
 }
 
@@ -212,8 +230,8 @@ onMounted(async () => {
           <div class="stat-value" :style="{ color: card.color }">{{ card.value ?? '—' }}</div>
         </div>
       </div>
-      <div class="stats-sub muted" v-if="refundStats.critical || refundStats.expired">
-        其中已超时 {{ refundStats.expired || 0 }} 条，4小时内到期 {{ refundStats.critical || 0 }} 条
+      <div class="stats-sub muted" v-if="refundStats.imminent || refundStats.critical || refundStats.expired">
+        其中已超时 {{ refundStats.expired || 0 }} 条，30分钟内到期 {{ refundStats.imminent || 0 }} 条，4小时内到期 {{ refundStats.critical || 0 }} 条
       </div>
     </el-card>
 
@@ -355,7 +373,7 @@ onMounted(async () => {
               <div v-if="row.sla.pickupHint" class="hint-text pickup-hint">{{ row.sla.pickupHint }}</div>
               <div v-if="row.sla.hint" class="hint-text">{{ row.sla.hint }}</div>
               <el-tag v-if="row.sla.urgency" size="small" :type="urgencyType(row.sla.urgency)">
-                {{ row.sla.urgency === 'expired' ? '已超时' : row.sla.urgency === 'critical' ? '紧急' : row.sla.urgency === 'warning' ? '临近' : row.sla.urgency === 'normal' ? '正常' : '—' }}
+                {{ urgencyLabel(row.sla.urgency) }}
               </el-tag>
             </template>
           </template>
@@ -536,6 +554,7 @@ onMounted(async () => {
   font-size: 14px;
 }
 .remaining.expired,
+.remaining.imminent,
 .remaining.critical {
   color: #f56c6c;
 }

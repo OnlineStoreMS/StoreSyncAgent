@@ -549,6 +549,7 @@ type RefundStatsView struct {
 	ReturnSigned             int `json:"returnSigned"`
 	PickupPending            int `json:"pickupPending"`
 	Urgent                   int `json:"urgent"`
+	Imminent                 int `json:"imminent"`
 	Critical                 int `json:"critical"`
 	Expired                  int `json:"expired"`
 }
@@ -833,10 +834,12 @@ func countUrgentSLAStats(stats *RefundStatsView, items []kdzs.RefundItem) {
 			continue
 		}
 		stats.Urgent++
-		if item.SLA.Urgency == "critical" {
+		switch item.SLA.Urgency {
+		case "imminent":
+			stats.Imminent++
+		case "critical":
 			stats.Critical++
-		}
-		if item.SLA.Urgency == "expired" {
+		case "expired":
 			stats.Expired++
 		}
 	}

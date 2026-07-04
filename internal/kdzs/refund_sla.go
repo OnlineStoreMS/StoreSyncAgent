@@ -12,6 +12,9 @@ const (
 	FXGAgreeHoursAfterApply         = 48
 	FXGRefundOnlyUrgeBufferHours    = 12 // 仅退款预留缓冲，应对消费者催促
 	FXGDaysAfterAcceptBeforeSign    = 7
+	FXGUrgentCriticalHours          = 4
+	FXGUrgentWarningHours           = 12
+	FXGUrgentImminentMinutes        = 30
 )
 
 type RefundSLA struct {
@@ -19,7 +22,7 @@ type RefundSLA struct {
 	DeadlineAt          string `json:"deadlineAt,omitempty"`
 	RemainingSeconds    int64  `json:"remainingSeconds,omitempty"`
 	RemainingText       string `json:"remainingText,omitempty"`
-	Urgency             string `json:"urgency,omitempty"` // critical | warning | normal | expired | unknown | none
+	Urgency             string `json:"urgency,omitempty"` // imminent | critical | warning | normal | expired | unknown | none
 	Source              string `json:"source,omitempty"`  // platform_rule | logistics_inferred | apply_time_inferred
 	Hint                string `json:"hint,omitempty"`
 	LogisticsStatus     string `json:"logisticsStatus,omitempty"`
@@ -175,10 +178,13 @@ func urgencyLevel(remainingSec int64) string {
 	if remainingSec <= 0 {
 		return "expired"
 	}
-	if remainingSec <= 4*3600 {
+	if remainingSec <= int64(FXGUrgentImminentMinutes*60) {
+		return "imminent"
+	}
+	if remainingSec <= FXGUrgentCriticalHours*3600 {
 		return "critical"
 	}
-	if remainingSec <= 12*3600 {
+	if remainingSec <= FXGUrgentWarningHours*3600 {
 		return "warning"
 	}
 	return "normal"
@@ -192,12 +198,12 @@ var AfterSaleStatusesWithSLADeadline = []string{
 	"WAIT_RECEIVE_EXCHANGE_ITEM",
 }
 
-// IsUrgentSLA 是否属于时效紧迫（剩余 ≤12h、≤4h 或已超时；含无法解析签收时间等 warning）。
+// IsUrgentSLA 是否属于时效紧迫（剩余 ≤12h、≤4h、≤30min 或已超时；含无法解析签收时间等 warning）。
 func IsUrgentSLA(sla *RefundSLA) bool {
 	if sla == nil {
 		return false
 	}
-	return sla.Urgency == "critical" || sla.Urgency == "expired" || sla.Urgency == "warning"
+	return sla.Urgency == "imminent" || sla.Urgency == "critical" || sla.Urgency == "expired" || sla.Urgency == "warning"
 }
 
 func formatRemaining(sec int64) string {
@@ -310,18 +316,20 @@ func slaSortKey(sla *RefundSLA) (priority int, remaining int64) {
 	switch sla.Urgency {
 	case "expired":
 		priority = 0
-	case "critical":
+	case "imminent":
 		priority = 1
-	case "warning":
+	case "critical":
 		priority = 2
-	case "normal":
+	case "warning":
 		priority = 3
-	case "unknown":
+	case "normal":
 		priority = 4
-	default:
+	case "unknown":
 		priority = 5
+	default:
+		priority = 6
 	}
-	if sla.DeadlineAt != "" || sla.Urgency == "expired" || sla.Urgency == "critical" || sla.Urgency == "warning" || sla.Urgency == "normal" {
+	if sla.DeadlineAt != "" || sla.Urgency == "expired" || sla.Urgency == "imminent" || sla.Urgency == "critical" || sla.Urgency == "warning" || sla.Urgency == "normal" {
 		return priority, sla.RemainingSeconds
 	}
 	return priority, 1<<62 - 1

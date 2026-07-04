@@ -239,7 +239,7 @@ onMounted(load)
       </el-descriptions>
       <div class="status-tip muted">
         <el-icon><Promotion /></el-icon>
-        同一账号下同一场景的同一售后单只推送一次；「时效紧迫」在 urgency 升级时会再次提醒。多账号去重互不影响。
+        同一账号下同一场景的同一售后单只推送一次；「时效紧迫」在 urgency 升级时会再次提醒（warning → critical 4h → imminent 30m → expired）。多账号去重互不影响。
       </div>
     </el-card>
   </div>

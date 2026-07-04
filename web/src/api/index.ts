@@ -178,7 +178,7 @@ export interface RefundSLA {
   deadlineAt?: string
   remainingSeconds?: number
   remainingText?: string
-  urgency?: 'critical' | 'warning' | 'normal' | 'expired' | 'unknown' | 'none'
+  urgency?: 'imminent' | 'critical' | 'warning' | 'normal' | 'expired' | 'unknown' | 'none'
   source?: string
   hint?: string
   logisticsStatus?: string
@@ -228,6 +228,7 @@ export interface RefundStats {
   returnSigned: number
   pickupPending: number
   urgent: number
+  imminent: number
   critical: number
   expired: number
 }

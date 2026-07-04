@@ -41,6 +41,9 @@ func TestIsUrgentSLA(t *testing.T) {
 	if !IsUrgentSLA(&RefundSLA{Urgency: "warning"}) {
 		t.Fatal("warning should be urgent")
 	}
+	if !IsUrgentSLA(&RefundSLA{Urgency: "imminent"}) {
+		t.Fatal("imminent should be urgent")
+	}
 	if IsUrgentSLA(&RefundSLA{Urgency: "normal"}) {
 		t.Fatal("normal should not be urgent")
 	}
@@ -49,16 +52,39 @@ func TestIsUrgentSLA(t *testing.T) {
 	}
 }
 
+func TestUrgencyLevel(t *testing.T) {
+	tests := []struct {
+		sec  int64
+		want string
+	}{
+		{-60, "expired"},
+		{0, "expired"},
+		{29 * 60, "imminent"},
+		{30 * 60, "imminent"},
+		{31 * 60, "critical"},
+		{4 * 3600, "critical"},
+		{4*3600 + 1, "warning"},
+		{12 * 3600, "warning"},
+		{12*3600 + 1, "normal"},
+	}
+	for _, tc := range tests {
+		if got := urgencyLevel(tc.sec); got != tc.want {
+			t.Fatalf("remaining=%d got=%q want=%q", tc.sec, got, tc.want)
+		}
+	}
+}
+
 func TestSortRefundItemsBySLAUrgency(t *testing.T) {
 	items := []RefundItem{
 		{RefundID: "normal", SLA: &RefundSLA{Urgency: "normal", RemainingSeconds: 86400}},
 		{RefundID: "expired", SLA: &RefundSLA{Urgency: "expired", RemainingSeconds: -7200}},
+		{RefundID: "imminent", SLA: &RefundSLA{Urgency: "imminent", RemainingSeconds: 900}},
 		{RefundID: "critical", SLA: &RefundSLA{Urgency: "critical", RemainingSeconds: 3600}},
 		{RefundID: "warning", SLA: &RefundSLA{Urgency: "warning", RemainingSeconds: 10000}},
 	}
 	SortRefundItemsBySLAUrgency(items)
-	order := []string{items[0].RefundID, items[1].RefundID, items[2].RefundID, items[3].RefundID}
-	want := []string{"expired", "critical", "warning", "normal"}
+	order := []string{items[0].RefundID, items[1].RefundID, items[2].RefundID, items[3].RefundID, items[4].RefundID}
+	want := []string{"expired", "imminent", "critical", "warning", "normal"}
 	for i := range want {
 		if order[i] != want[i] {
 			t.Fatalf("order=%v want=%v", order, want)
