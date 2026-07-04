@@ -703,6 +703,9 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 			items[i].SLA = kdzs.ComputeRefundSLA(&items[i], nil, now)
 		}
 		return items, nil
+
+	case "urgent":
+		return s.collectUrgentRefunds(ctx, platform, base, now)
 	}
 
 	var matched []kdzs.RefundItem
@@ -720,19 +723,38 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 			matched = append(matched, item)
 		}
 	}
+	return matched, nil
+}
 
-	if scenario == "urgent" {
-		agreeQ := base
-		agreeQ.AfterSaleStatusList = []string{"WAIT_SELLER_AGREE"}
-		agreeQ.AfterSaleTypeList = nil
-		agreeItems, _, err := s.session.QueryAllRefunds(ctx, agreeQ)
+func (s *SyncService) collectUrgentRefunds(ctx context.Context, platform string, base kdzs.RefundQuery, now time.Time) ([]kdzs.RefundItem, error) {
+	var matched []kdzs.RefundItem
+
+	confirmQ := base
+	confirmQ.AfterSaleStatusList = []string{"WAIT_SELLER_CONFIRM_RECEIVE"}
+	confirmQ.AfterSaleTypeList = nil
+	confirmItems, _, err := s.session.QueryAllRefunds(ctx, confirmQ)
+	if err != nil {
+		return nil, err
+	}
+	s.session.EnrichRefundsLogistics(ctx, platform, confirmItems, 8)
+	for _, item := range confirmItems {
+		if kdzs.IsUrgentSLA(item.SLA) {
+			matched = append(matched, item)
+		}
+	}
+
+	for _, status := range []string{"WAIT_SELLER_AGREE", "WAIT_SEND_EXCHANGE_ITEM", "WAIT_RECEIVE_EXCHANGE_ITEM"} {
+		q := base
+		q.AfterSaleStatusList = []string{status}
+		q.AfterSaleTypeList = nil
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
 		if err != nil {
 			return nil, err
 		}
-		for i := range agreeItems {
-			agreeItems[i].SLA = kdzs.ComputeRefundSLA(&agreeItems[i], nil, now)
-			if kdzs.MatchRefundScenario(agreeItems[i], scenario) {
-				matched = append(matched, agreeItems[i])
+		for i := range items {
+			items[i].SLA = kdzs.ComputeRefundSLA(&items[i], nil, now)
+			if kdzs.IsUrgentSLA(items[i].SLA) {
+				matched = append(matched, items[i])
 			}
 		}
 	}
@@ -762,10 +784,18 @@ func applyConfirmReceiveSLAStats(stats *RefundStatsView, items []kdzs.RefundItem
 		if item.SLA.IsPickupPending && !item.SLA.IsSigned {
 			stats.PickupPending++
 		}
-		switch item.SLA.Urgency {
-		case "critical", "expired", "warning":
-			stats.Urgent++
+	}
+}
+
+func countUrgentSLAStats(stats *RefundStatsView, items []kdzs.RefundItem) {
+	for _, item := range items {
+		if item.SLA == nil {
+			continue
 		}
+		if !kdzs.IsUrgentSLA(item.SLA) {
+			continue
+		}
+		stats.Urgent++
 		if item.SLA.Urgency == "critical" {
 			stats.Critical++
 		}
@@ -773,6 +803,26 @@ func applyConfirmReceiveSLAStats(stats *RefundStatsView, items []kdzs.RefundItem
 			stats.Expired++
 		}
 	}
+}
+
+func (s *SyncService) countUrgentStatsForStatus(ctx context.Context, platform string, base kdzs.RefundQuery, status string, withLogistics bool, stats *RefundStatsView) error {
+	q := base
+	q.AfterSaleStatusList = []string{status}
+	q.AfterSaleTypeList = nil
+	items, _, err := s.session.QueryAllRefunds(ctx, q)
+	if err != nil {
+		return err
+	}
+	if withLogistics {
+		s.session.EnrichRefundsLogistics(ctx, platform, items, 8)
+	} else {
+		now := time.Now()
+		for i := range items {
+			items[i].SLA = kdzs.ComputeRefundSLA(&items[i], nil, now)
+		}
+	}
+	countUrgentSLAStats(stats, items)
+	return nil
 }
 
 func (s *SyncService) GetRefundLogistics(ctx context.Context, platform, sid, sidCode string) (*kdzs.LogisticsDetail, error) {
@@ -878,27 +928,16 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 		stats.WaitSendExchange = res.Total
 	}
 
-	// 待确认收货：拉全量并查物流，统计签收/待取件/紧迫（与场景 Tab 一致）。
+	// 待确认收货：拉全量并查物流，统计签收/待取件（与场景 Tab 一致）。
 	if confirmItems, err := s.loadConfirmReceiveWithSLA(ctx, platform, base); err == nil {
 		applyConfirmReceiveSLAStats(stats, confirmItems)
 	}
 
-	// Urgent from wait_agree (仅退款).
-	agreeQ := base
-	agreeQ.PageSize = 50
-	agreeQ.AfterSaleStatusList = []string{"WAIT_SELLER_AGREE"}
-	if res, err := s.session.QueryRefunds(ctx, agreeQ); err == nil {
-		for i := range res.Items {
-			sla := kdzs.ComputeRefundSLA(&res.Items[i], nil, time.Now())
-			if sla.Urgency == "critical" || sla.Urgency == "expired" || sla.Urgency == "warning" {
-				stats.Urgent++
-			}
-			if sla.Urgency == "critical" {
-				stats.Critical++
-			}
-			if sla.Urgency == "expired" {
-				stats.Expired++
-			}
+	// 时效紧迫：全量扫描所有有倒计时的售后状态。
+	for _, status := range kdzs.AfterSaleStatusesWithSLADeadline {
+		withLogistics := status == "WAIT_SELLER_CONFIRM_RECEIVE"
+		if err := s.countUrgentStatsForStatus(ctx, platform, base, status, withLogistics, stats); err != nil {
+			return stats, err
 		}
 	}
 

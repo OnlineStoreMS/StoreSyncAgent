@@ -34,6 +34,21 @@ func parseTestTime(t *testing.T, s string) time.Time {
 	return got
 }
 
+func TestIsUrgentSLA(t *testing.T) {
+	if IsUrgentSLA(nil) {
+		t.Fatal("nil sla should not be urgent")
+	}
+	if !IsUrgentSLA(&RefundSLA{Urgency: "warning"}) {
+		t.Fatal("warning should be urgent")
+	}
+	if IsUrgentSLA(&RefundSLA{Urgency: "normal"}) {
+		t.Fatal("normal should not be urgent")
+	}
+	if !MatchRefundScenario(RefundItem{SLA: &RefundSLA{Urgency: "critical"}}, "urgent") {
+		t.Fatal("critical should match urgent scenario")
+	}
+}
+
 func TestSortRefundItemsBySLAUrgency(t *testing.T) {
 	items := []RefundItem{
 		{RefundID: "normal", SLA: &RefundSLA{Urgency: "normal", RemainingSeconds: 86400}},

@@ -184,6 +184,22 @@ func urgencyLevel(remainingSec int64) string {
 	return "normal"
 }
 
+// AfterSaleStatusesWithSLADeadline 会产生倒计时 SLA 的售后状态（用于「时效紧迫」全量扫描）。
+var AfterSaleStatusesWithSLADeadline = []string{
+	"WAIT_SELLER_AGREE",
+	"WAIT_SELLER_CONFIRM_RECEIVE",
+	"WAIT_SEND_EXCHANGE_ITEM",
+	"WAIT_RECEIVE_EXCHANGE_ITEM",
+}
+
+// IsUrgentSLA 是否属于时效紧迫（剩余 ≤12h、≤4h 或已超时；含无法解析签收时间等 warning）。
+func IsUrgentSLA(sla *RefundSLA) bool {
+	if sla == nil {
+		return false
+	}
+	return sla.Urgency == "critical" || sla.Urgency == "expired" || sla.Urgency == "warning"
+}
+
 func formatRemaining(sec int64) string {
 	if sec <= 0 {
 		overdue := -sec
@@ -235,7 +251,7 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 		}
 		return sla != nil && sla.IsPickupPending && !sla.IsSigned
 	case "urgent":
-		return sla != nil && (sla.Urgency == "critical" || sla.Urgency == "expired" || sla.Urgency == "warning")
+		return IsUrgentSLA(sla)
 	default:
 		return true
 	}
