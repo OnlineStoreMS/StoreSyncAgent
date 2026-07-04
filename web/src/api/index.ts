@@ -386,6 +386,9 @@ export interface NotificationConfig {
   webhookUrl: string
   secret?: string
   secretSet?: boolean
+  appId?: string
+  appSecret?: string
+  appSecretSet?: boolean
   platform: string
   pollIntervalMinutes: number
   dateRangeDays: number

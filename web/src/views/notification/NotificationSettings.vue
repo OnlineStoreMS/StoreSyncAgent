@@ -20,10 +20,12 @@ const scenarioOptions = ref<NotificationScenarioOption[]>([])
 const accountOptions = ref<KdzsAccount[]>([])
 const state = ref<NotificationState>({})
 const secretInput = ref('')
+const appSecretInput = ref('')
 
 const form = reactive<NotificationConfig>({
   enabled: false,
   webhookUrl: '',
+  appId: '',
   platform: 'FXG',
   pollIntervalMinutes: 15,
   dateRangeDays: 30,
@@ -42,6 +44,7 @@ async function load() {
     scenarioOptions.value = data.scenarios || []
     accountOptions.value = data.accounts || []
     secretInput.value = ''
+    appSecretInput.value = ''
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error || e.message || '加载失败')
   } finally {
@@ -55,6 +58,7 @@ async function onSave() {
     const payload: NotificationConfig = {
       ...form,
       secret: secretInput.value || undefined,
+      appSecret: appSecretInput.value || undefined,
     }
     const data = await saveNotification(payload)
     Object.assign(form, data.config)
@@ -62,6 +66,7 @@ async function onSave() {
     form.accountIds = [...(data.config.accountIds || [])]
     state.value = data.state || {}
     secretInput.value = ''
+    appSecretInput.value = ''
     ElMessage.success('已保存')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error || e.message || '保存失败')
@@ -173,6 +178,18 @@ onMounted(load)
             :placeholder="form.secretSet ? '已配置，留空则不修改' : '机器人安全设置中的签名校验密钥'"
           />
         </el-form-item>
+        <el-form-item label="飞书应用 ID">
+          <el-input v-model="form.appId" placeholder="cli_xxx（用于上传物流单号条形码图片）" />
+        </el-form-item>
+        <el-form-item label="飞书应用 Secret">
+          <el-input
+            v-model="appSecretInput"
+            type="password"
+            show-password
+            :placeholder="form.appSecretSet ? '已配置，留空则不修改' : '企业自建应用 App Secret'"
+          />
+          <div class="field-tip muted">配置后，有退货物流单号的通知会在卡片底部附带 Code128 条形码；需开通「获取与上传图片或文件资源」权限</div>
+        </el-form-item>
         <el-form-item label="定时拉取">
           <div class="inline-field">
             每
@@ -239,7 +256,7 @@ onMounted(load)
       </el-descriptions>
       <div class="status-tip muted">
         <el-icon><Promotion /></el-icon>
-        同一账号下同一场景的同一售后单只推送一次；「时效紧迫」在 urgency 升级时会再次提醒（warning → critical 4h → imminent 30m → expired）。多账号去重互不影响。
+        同一账号下同一场景的同一售后单只推送一次；「时效紧迫」在 urgency 升级时会再次提醒（warning → critical 4h → imminent 30m → expired）。有物流单号且配置了飞书应用凭证时，卡片底部会显示条形码。多账号去重互不影响。
       </div>
     </el-card>
   </div>

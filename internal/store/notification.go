@@ -19,6 +19,8 @@ type NotificationConfig struct {
 	DateRangeDays       int      `json:"dateRangeDays,omitempty"`
 	Scenarios           []string `json:"scenarios,omitempty"`
 	AccountIDs          []string `json:"accountIds,omitempty"` // 空=全部 accounts
+	AppID               string   `json:"appId,omitempty"`
+	AppSecret           string   `json:"appSecret,omitempty"`
 }
 
 type NotificationState struct {
@@ -118,6 +120,9 @@ func (s *NotificationStore) SaveConfig(cfg NotificationConfig) (NotificationData
 	}
 	if cfg.Secret == "" {
 		cfg.Secret = data.Config.Secret
+	}
+	if cfg.AppSecret == "" {
+		cfg.AppSecret = data.Config.AppSecret
 	}
 	normalizeNotificationConfig(&cfg)
 	data.Config = cfg

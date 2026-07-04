@@ -56,6 +56,8 @@ type NotificationConfigView struct {
 	DateRangeDays       int      `json:"dateRangeDays"`
 	Scenarios           []string `json:"scenarios"`
 	AccountIDs          []string `json:"accountIds"`
+	AppID               string   `json:"appId,omitempty"`
+	AppSecretSet        bool     `json:"appSecretSet"`
 }
 
 type NotificationRunResult struct {
@@ -108,6 +110,8 @@ func toNotificationConfigView(cfg store.NotificationConfig) NotificationConfigVi
 		Scenarios:           append([]string(nil), cfg.Scenarios...),
 		AccountIDs:          append([]string(nil), cfg.AccountIDs...),
 		SecretSet:           cfg.Secret != "",
+		AppID:               cfg.AppID,
+		AppSecretSet:        cfg.AppSecret != "",
 	}
 }
 
@@ -257,6 +261,7 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 					continue
 				}
 				card := buildRefundNotificationCard(accountName, scenario, item)
+				s.attachLogisticsBarcode(ctx, cfg, &card, item.Sid)
 				if err := s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card); err != nil {
 					sendErr = err
 					break
@@ -381,6 +386,19 @@ func buildRefundNotificationCard(accountName, scenario string, item kdzs.RefundI
 		Template: scenarioCardTemplate(scenario, item),
 		Markdown: strings.Join(lines, "\n"),
 	}
+}
+
+func (s *SyncService) attachLogisticsBarcode(ctx context.Context, cfg store.NotificationConfig, card *feishu.InteractiveCard, sid string) {
+	sid = strings.TrimSpace(sid)
+	if sid == "" || cfg.AppID == "" || cfg.AppSecret == "" {
+		return
+	}
+	key, err := s.feishuClient.UploadBarcodeImage(ctx, cfg.AppID, cfg.AppSecret, sid)
+	if err != nil {
+		return
+	}
+	card.FooterImgKey = key
+	card.FooterImgAlt = sid
 }
 
 func scenarioCardTemplate(scenario string, item kdzs.RefundItem) string {

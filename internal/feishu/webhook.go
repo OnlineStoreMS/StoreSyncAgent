@@ -11,11 +11,14 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 )
 
 type Client struct {
 	httpClient *http.Client
+	tokenMu    sync.Mutex
+	tokenCache tokenCache
 }
 
 func NewClient() *Client {
