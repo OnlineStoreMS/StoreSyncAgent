@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { ElMessage } from 'element-plus'
 import { decryptOrders, listOrders, setOrderAgentType, type Order, type OrderFilters, type OrderListResponse } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
@@ -289,6 +290,16 @@ function sortByCreateTime(a: Order, b: Order) {
 function sortByPayTime(a: Order, b: Order) {
   return compareNullableTime(a, b, (row) => row.payTime)
 }
+
+async function refreshForAccountSwitch() {
+  filters.shopId = ''
+  filters.pageNo = 1
+  selectedOrders.value = []
+  await kdzsStore.loadFactories(filters.platform)
+  await loadOrders()
+}
+
+useAccountRefresh(refreshForAccountSwitch)
 
 onMounted(async () => {
   if (!kdzsStore.shops.length) {

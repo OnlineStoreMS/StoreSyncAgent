@@ -30,6 +30,8 @@ export const useKdzsStore = defineStore('kdzs', () => {
   const shops = ref<Shop[]>([])
   const factories = ref<FactoryItem[]>([])
   const stats = ref<OrderListResponse['stats']>()
+  /** 账号切换成功后递增，供各数据页监听并刷新。 */
+  const accountVersion = ref(0)
   const loading = ref({ status: false, shops: false, overview: false, accounts: false, factories: false, switch: false })
 
   async function loadStatus() {
@@ -60,6 +62,7 @@ export const useKdzsStore = defineStore('kdzs', () => {
       factories.value = []
       stats.value = undefined
       await Promise.all([loadAccounts(), loadShops(), loadOverviewStats()])
+      accountVersion.value++
       ElMessage.success(`已切换到 ${formatAccountTitle({
         name: loginInfo.value.accountName,
         mobile: loginInfo.value.mobile,
@@ -122,6 +125,7 @@ export const useKdzsStore = defineStore('kdzs', () => {
     shops,
     factories,
     stats,
+    accountVersion,
     loading,
     loadStatus,
     loadAccounts,

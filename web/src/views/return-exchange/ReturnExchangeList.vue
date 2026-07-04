@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
@@ -210,6 +211,8 @@ async function manualLookup(row: ReturnExchangeRecord) {
   }
   await onOrderNoBlur(row)
 }
+
+useAccountRefresh(loadList)
 
 onMounted(loadList)
 </script>

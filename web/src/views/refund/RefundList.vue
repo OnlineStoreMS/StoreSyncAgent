@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -172,6 +173,12 @@ const logisticsTraceList = computed(() => {
   const list = logisticsDetail.value?.traceList
   if (!list?.length) return []
   return [...list].reverse()
+})
+
+useAccountRefresh(async () => {
+  filters.shopId = ''
+  filters.pageNo = 1
+  await loadRefunds()
 })
 
 onMounted(async () => {

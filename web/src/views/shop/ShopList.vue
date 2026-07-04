@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
+import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { useKdzsStore } from '../../stores/kdzs'
 
 const kdzsStore = useKdzsStore()
@@ -11,6 +12,8 @@ const platformSummary = computed(() => {
   }
   return [...map.entries()].map(([name, count]) => ({ name, count }))
 })
+
+useAccountRefresh(() => kdzsStore.loadShops())
 
 onMounted(() => {
   void kdzsStore.loadShops()

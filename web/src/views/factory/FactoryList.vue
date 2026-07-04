@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { useKdzsStore } from '../../stores/kdzs'
 
 const kdzsStore = useKdzsStore()
 const platform = ref('FXG')
+
+useAccountRefresh(syncFactories)
 
 onMounted(() => {
   void kdzsStore.loadFactories(platform.value)

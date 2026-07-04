@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { List, Shop, Connection, WarningFilled } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -7,6 +7,7 @@ import { getRefundStats, type RefundStats } from '../api'
 import { useKdzsStore } from '../stores/kdzs'
 import { defaultDateRange } from '../utils/date'
 import { formatAccountTitle } from '../utils/account'
+import { useAccountRefresh } from '../composables/useAccountRefresh'
 
 const router = useRouter()
 const kdzsStore = useKdzsStore()
@@ -114,12 +115,7 @@ async function onSwitchAccount(accountId: string) {
   await kdzsStore.switchKdzsAccount(accountId)
 }
 
-watch(
-  () => kdzsStore.loginInfo.accountId,
-  () => {
-    void loadRefundStats()
-  },
-)
+useAccountRefresh(loadRefundStats)
 
 onMounted(async () => {
   if (!kdzsStore.accounts.length) {
