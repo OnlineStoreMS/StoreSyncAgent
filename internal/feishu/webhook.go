@@ -22,17 +22,6 @@ func NewClient() *Client {
 	return &Client{httpClient: &http.Client{Timeout: 15 * time.Second}}
 }
 
-type textPayload struct {
-	Timestamp string    `json:"timestamp"`
-	Sign      string    `json:"sign,omitempty"`
-	MsgType   string    `json:"msg_type"`
-	Content   textBody  `json:"content"`
-}
-
-type textBody struct {
-	Text string `json:"text"`
-}
-
 func Sign(secret string, timestamp int64) (string, error) {
 	if secret == "" {
 		return "", nil
@@ -46,27 +35,47 @@ func Sign(secret string, timestamp int64) (string, error) {
 }
 
 func (c *Client) SendText(ctx context.Context, webhookURL, secret, text string) error {
+	return c.postSignedJSON(ctx, webhookURL, secret, map[string]any{
+		"msg_type": "text",
+		"content": map[string]any{
+			"text": text,
+		},
+	})
+}
+
+func signPayload(secret string) (timestamp, sign string, err error) {
+	ts := time.Now().Unix()
+	if secret = trimSpace(secret); secret == "" {
+		return strconv.FormatInt(ts, 10), "", nil
+	}
+	s, err := Sign(secret, ts)
+	if err != nil {
+		return "", "", err
+	}
+	return strconv.FormatInt(ts, 10), s, nil
+}
+
+func (c *Client) postSignedJSON(ctx context.Context, webhookURL, secret string, payload map[string]any) error {
 	webhookURL = trimSpace(webhookURL)
 	if webhookURL == "" {
 		return fmt.Errorf("webhook url is required")
 	}
-	ts := time.Now().Unix()
-	payload := textPayload{
-		Timestamp: strconv.FormatInt(ts, 10),
-		MsgType:   "text",
-		Content:   textBody{Text: text},
+	ts, sign, err := signPayload(secret)
+	if err != nil {
+		return err
 	}
-	if secret = trimSpace(secret); secret != "" {
-		sign, err := Sign(secret, ts)
-		if err != nil {
-			return err
-		}
-		payload.Sign = sign
+	payload["timestamp"] = ts
+	if sign != "" {
+		payload["sign"] = sign
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
+	return c.doPost(ctx, webhookURL, body)
+}
+
+func (c *Client) doPost(ctx context.Context, webhookURL string, body []byte) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
 	if err != nil {
 		return err

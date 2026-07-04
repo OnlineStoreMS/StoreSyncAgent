@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"storesyncagent/internal/config"
+	"storesyncagent/internal/feishu"
 	"storesyncagent/internal/kdzs"
 	"storesyncagent/internal/store"
 )
@@ -157,9 +158,14 @@ func (s *SyncService) TestNotification(ctx context.Context, text string) error {
 		return fmt.Errorf("请先配置 Webhook 地址")
 	}
 	if text == "" {
-		text = "【StoreSyncAgent】飞书通知测试消息"
+		text = "这是一条测试消息"
 	}
-	return s.feishuClient.SendText(ctx, cfg.WebhookURL, cfg.Secret, text)
+	card := feishu.InteractiveCard{
+		Title:    "StoreSyncAgent · 测试通知",
+		Template: "blue",
+		Markdown: fmt.Sprintf("**说明：** %s\n\n<font color='grey'>若能看到本条彩色卡片，说明 Webhook 配置正确。</font>", escapeLarkMD(text)),
+	}
+	return s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card)
 }
 
 func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRunResult, error) {
@@ -241,8 +247,8 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 					skipped++
 					continue
 				}
-				text := formatRefundNotification(accountName, scenario, item)
-				if err := s.feishuClient.SendText(ctx, cfg.WebhookURL, cfg.Secret, text); err != nil {
+				card := buildRefundNotificationCard(accountName, scenario, item)
+				if err := s.feishuClient.SendInteractiveCard(ctx, cfg.WebhookURL, cfg.Secret, card); err != nil {
 					sendErr = err
 					break
 				}
@@ -309,57 +315,121 @@ func notificationKey(accountID string, item kdzs.RefundItem, scenario string) st
 	return accountID + ":" + item.RefundID + ":" + scenario
 }
 
-func formatRefundNotification(accountName, scenario string, item kdzs.RefundItem) string {
+func buildRefundNotificationCard(accountName, scenario string, item kdzs.RefundItem) feishu.InteractiveCard {
 	label := notificationScenarioLabels[scenario]
 	if label == "" {
 		label = scenario
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "【售后通知 · %s】\n", label)
-	if accountName != "" {
-		fmt.Fprintf(&b, "快递助手账号：%s\n", accountName)
+	var lines []string
+	if line := mdLine("快递助手账号", accountName, ""); line != "" {
+		lines = append(lines, line)
 	}
-	if item.ShopName != "" {
-		fmt.Fprintf(&b, "店铺：%s\n", item.ShopName)
+	if line := mdLine("店铺", item.ShopName, "blue"); line != "" {
+		lines = append(lines, line)
 	}
-	if item.Tid != "" {
-		fmt.Fprintf(&b, "订单号：%s\n", item.Tid)
+	if line := mdLine("订单号", item.Tid, ""); line != "" {
+		lines = append(lines, line)
 	}
-	if item.RefundID != "" {
-		fmt.Fprintf(&b, "售后单：%s\n", item.RefundID)
+	if line := mdLine("售后单", item.RefundID, ""); line != "" {
+		lines = append(lines, line)
 	}
-	if item.AfterSaleTypeText != "" {
-		fmt.Fprintf(&b, "类型：%s\n", item.AfterSaleTypeText)
+	if line := mdLine("类型", item.AfterSaleTypeText, "purple"); line != "" {
+		lines = append(lines, line)
 	}
-	if item.AfterSaleStatusText != "" {
-		fmt.Fprintf(&b, "状态：%s\n", item.AfterSaleStatusText)
+	if line := mdLine("状态", item.AfterSaleStatusText, ""); line != "" {
+		lines = append(lines, line)
 	}
-	if item.BuyerNick != "" {
-		fmt.Fprintf(&b, "买家：%s\n", item.BuyerNick)
+	if line := mdLine("买家", item.BuyerNick, ""); line != "" {
+		lines = append(lines, line)
 	}
-	if item.Sid != "" {
-		fmt.Fprintf(&b, "退货物流：%s\n", item.Sid)
+	if line := mdLine("退货物流", item.Sid, ""); line != "" {
+		lines = append(lines, line)
 	}
 	if g := firstRefundGoods(item); g != nil {
-		if g.Title != "" {
-			fmt.Fprintf(&b, "商品：%s\n", g.Title)
+		if line := mdLine("商品", g.Title, ""); line != "" {
+			lines = append(lines, line)
 		}
-		if g.SkuName != "" {
-			fmt.Fprintf(&b, "规格：%s\n", g.SkuName)
+		if line := mdLine("规格", g.SkuName, ""); line != "" {
+			lines = append(lines, line)
 		}
 	}
 	if item.SLA != nil {
 		if item.SLA.RemainingText != "" {
-			fmt.Fprintf(&b, "时效：%s\n", item.SLA.RemainingText)
+			color := urgencyColor(item.SLA.Urgency)
+			if line := mdLine("时效", item.SLA.RemainingText, color); line != "" {
+				lines = append(lines, line)
+			}
 		}
-		if item.SLA.Hint != "" {
-			fmt.Fprintf(&b, "说明：%s\n", item.SLA.Hint)
+		if line := mdLine("说明", item.SLA.Hint, "grey"); line != "" {
+			lines = append(lines, line)
 		}
-		if item.SLA.PickupHint != "" {
-			fmt.Fprintf(&b, "物流：%s\n", truncateText(item.SLA.PickupHint, 120))
+		if line := mdLine("物流", truncateText(item.SLA.PickupHint, 120), "grey"); line != "" {
+			lines = append(lines, line)
 		}
 	}
-	return strings.TrimSpace(b.String())
+	return feishu.InteractiveCard{
+		Title:    "售后通知 · " + label,
+		Template: scenarioCardTemplate(scenario, item),
+		Markdown: strings.Join(lines, "\n"),
+	}
+}
+
+func scenarioCardTemplate(scenario string, item kdzs.RefundItem) string {
+	if scenario == "urgent" && item.SLA != nil {
+		switch item.SLA.Urgency {
+		case "expired", "critical":
+			return "red"
+		case "warning":
+			return "orange"
+		}
+	}
+	switch scenario {
+	case "pickup_pending":
+		return "wathet"
+	case "return_signed":
+		return "green"
+	case "refund_only":
+		return "red"
+	case "wait_agree":
+		return "orange"
+	case "exchange", "wait_send_exchange":
+		return "purple"
+	case "urgent":
+		return "orange"
+	default:
+		return "blue"
+	}
+}
+
+func urgencyColor(urgency string) string {
+	switch urgency {
+	case "expired", "critical":
+		return "red"
+	case "warning":
+		return "orange"
+	default:
+		return "green"
+	}
+}
+
+func mdLine(label, value, color string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = escapeLarkMD(value)
+	if color != "" {
+		value = fmt.Sprintf("<font color='%s'>%s</font>", color, value)
+	}
+	return fmt.Sprintf("**%s：** %s", escapeLarkMD(label), value)
+}
+
+func escapeLarkMD(s string) string {
+	replacer := strings.NewReplacer(
+		"<", "&lt;",
+		">", "&gt;",
+	)
+	return replacer.Replace(s)
 }
 
 func firstRefundGoods(item kdzs.RefundItem) *kdzs.RefundGoods {
