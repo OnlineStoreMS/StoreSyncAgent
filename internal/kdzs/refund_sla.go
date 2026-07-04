@@ -272,8 +272,11 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 }
 
 func IsSellerRefuseStatus(status string) bool {
-	return status == "SELLER_REFUSE" || status == "SELLER_REFUSAL_REFUND"
+	return status == "SELLER_REFUSAL_REFUND" || status == "SELLER_REFUSE"
 }
+
+// SellerRefuseQueryStatus 快递助手 queryRefund 支持的卖家拒绝状态筛选值。
+func SellerRefuseQueryStatus() string { return "SELLER_REFUSAL_REFUND" }
 
 func activeRefundStatus(status string) bool {
 	switch status {

@@ -553,6 +553,10 @@ type RefundStatsView struct {
 	Imminent                 int `json:"imminent"`
 	Critical                 int `json:"critical"`
 	Expired                  int `json:"expired"`
+	WaitBuyerReturn          int `json:"waitBuyerReturn"`
+	SellerRefuse             int `json:"sellerRefuse"`
+	RefundCloseWithSid       int `json:"refundCloseWithSid"`
+	RefundSuccess            int `json:"refundSuccess"`
 }
 
 type RefundListView struct {
@@ -778,7 +782,7 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 
 	case "seller_refuse":
 		q := base
-		q.AfterSaleStatusList = []string{"SELLER_REFUSE", "SELLER_REFUSAL_REFUND"}
+		q.AfterSaleStatusList = []string{kdzs.SellerRefuseQueryStatus()}
 		q.AfterSaleTypeList = nil
 		items, _, err := s.session.QueryAllRefunds(ctx, q)
 		if err != nil {
@@ -968,7 +972,7 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 		case "refund_success":
 			rq.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
 		case "seller_refuse":
-			rq.AfterSaleStatusList = []string{"SELLER_REFUSE", "SELLER_REFUSAL_REFUND"}
+			rq.AfterSaleStatusList = []string{kdzs.SellerRefuseQueryStatus()}
 		case "refund_close_with_sid":
 			rq.AfterSaleStatusList = []string{"REFUND_CLOSE"}
 		}
@@ -1045,6 +1049,19 @@ func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q R
 	sendExQ.AfterSaleStatusList = []string{"WAIT_SEND_EXCHANGE_ITEM"}
 	if res, err := s.session.QueryRefunds(ctx, sendExQ); err == nil {
 		stats.WaitSendExchange = res.Total
+	}
+
+	stats.WaitBuyerReturn = countStatus("WAIT_BUYER_RETURN_ITEM")
+	stats.SellerRefuse = countStatus(kdzs.SellerRefuseQueryStatus())
+	stats.RefundSuccess = countStatus("REFUND_SUCCESS")
+	closeQ := base
+	closeQ.AfterSaleStatusList = []string{"REFUND_CLOSE"}
+	if closeItems, _, err := s.session.QueryAllRefunds(ctx, closeQ); err == nil {
+		for _, item := range closeItems {
+			if strings.TrimSpace(item.Sid) != "" {
+				stats.RefundCloseWithSid++
+			}
+		}
 	}
 
 	// 待确认收货：拉全量并查物流，统计签收/待取件（与场景 Tab 一致）。

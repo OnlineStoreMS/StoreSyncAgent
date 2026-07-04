@@ -156,8 +156,10 @@ func AfterSaleStatusLabel(status string) string {
 		return "退款成功"
 	case "REFUND_CLOSE":
 		return "售后关闭"
-	case "SELLER_REFUSE", "SELLER_REFUSAL_REFUND":
-		return "卖家拒绝"
+	case "SELLER_REFUSAL_REFUND":
+		return "卖家拒绝退款"
+	case "SELLER_REFUSE":
+		return "卖家拒绝退款"
 	case "WAIT_BUYER_CONFIRM":
 		return "等待买家确认"
 	case "WAIT_BUYER_MODIFY":
@@ -320,7 +322,7 @@ func parseRefundItem(raw json.RawMessage, platform string) *RefundItem {
 		Tid:                 strVal(m["tid"]),
 		SysTid:              strVal(m["sysTid"]),
 		AfterSaleStatus:     strVal(m["afterSaleStatus"]),
-		AfterSaleStatusText: AfterSaleStatusLabel(strVal(m["afterSaleStatus"])),
+		AfterSaleStatusText: firstNonEmpty(strVal(m["afterSaleStatusText"]), AfterSaleStatusLabel(strVal(m["afterSaleStatus"]))),
 		AfterSaleType:       intVal(m["afterSaleType"]),
 		AfterSaleTypeText:   AfterSaleTypeLabel(intVal(m["afterSaleType"])),
 		RefundReason:        strVal(m["refundReason"]),

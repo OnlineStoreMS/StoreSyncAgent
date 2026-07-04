@@ -231,6 +231,10 @@ export interface RefundStats {
   imminent: number
   critical: number
   expired: number
+  waitBuyerReturn: number
+  sellerRefuse: number
+  refundCloseWithSid: number
+  refundSuccess: number
 }
 
 export interface RefundListResponse {
