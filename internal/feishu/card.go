@@ -39,9 +39,7 @@ func cardBodyElements(card InteractiveCard) []any {
 					"tag":     "plain_text",
 					"content": alt,
 				},
-				"mode":          "fit_horizontal",
-				"compact_width": false,
-				"custom_width":  "360px",
+				"mode": "fit_horizontal",
 			},
 		)
 	}
