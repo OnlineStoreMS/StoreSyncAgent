@@ -39,6 +39,7 @@ func Setup(h *handler.Handler, webDist string) *gin.Engine {
 		api.PUT("/notifications", h.SaveNotification)
 		api.POST("/notifications/test", h.TestNotification)
 		api.POST("/notifications/run", h.RunNotification)
+		api.POST("/notifications/reset-state", h.ResetNotificationState)
 	}
 
 	mountWebUI(r, webDist)

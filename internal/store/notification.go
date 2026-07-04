@@ -159,6 +159,21 @@ func (s *NotificationStore) UpdateState(fn func(*NotificationState) error) error
 	return s.saveLocked(data)
 }
 
+func (s *NotificationStore) ResetState() (cleared int, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	data, err := s.loadLocked()
+	if err != nil {
+		return 0, err
+	}
+	cleared = len(data.State.Notified)
+	data.State = NotificationState{Notified: map[string]string{}}
+	if err := s.saveLocked(data); err != nil {
+		return 0, err
+	}
+	return cleared, nil
+}
+
 func pruneNotified(notified map[string]string, keepDays int) {
 	if len(notified) == 0 {
 		return

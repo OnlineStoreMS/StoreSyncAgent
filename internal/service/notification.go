@@ -89,6 +89,15 @@ func (s *SyncService) GetNotificationView() (*NotificationView, error) {
 	return s.buildNotificationView(data), nil
 }
 
+func (s *SyncService) ResetNotificationState() (*NotificationView, int, error) {
+	cleared, err := s.notificationStore.ResetState()
+	if err != nil {
+		return nil, 0, err
+	}
+	view, err := s.GetNotificationView()
+	return view, cleared, err
+}
+
 func toNotificationConfigView(cfg store.NotificationConfig) NotificationConfigView {
 	return NotificationConfigView{
 		Enabled:             cfg.Enabled,

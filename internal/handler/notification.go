@@ -51,3 +51,12 @@ func (h *Handler) RunNotification(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+func (h *Handler) ResetNotificationState(c *gin.Context) {
+	view, cleared, err := h.svc.ResetNotificationState()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"cleared": cleared, "view": view})
+}

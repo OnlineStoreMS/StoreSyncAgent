@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Bell, Promotion, Refresh } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Bell, Delete, Promotion, Refresh } from '@element-plus/icons-vue'
 import {
   getNotification,
+  resetNotificationState,
   runNotification,
   saveNotification,
   testNotification,
@@ -14,7 +15,7 @@ import {
 } from '../../api'
 import { formatAccountTitle } from '../../utils/account'
 
-const loading = reactive({ load: false, save: false, test: false, run: false })
+const loading = reactive({ load: false, save: false, test: false, run: false, reset: false })
 const scenarioOptions = ref<NotificationScenarioOption[]>([])
 const accountOptions = ref<KdzsAccount[]>([])
 const state = ref<NotificationState>({})
@@ -98,6 +99,33 @@ async function onRunNow() {
     }
   } finally {
     loading.run = false
+  }
+}
+
+async function onResetState() {
+  try {
+    await ElMessageBox.confirm(
+      '将清空已推送去重记录与运行状态，之后「立即检查」或定时任务会重新推送符合条件的售后通知。通知配置不会改动。',
+      '重置通知记录',
+      { type: 'warning', confirmButtonText: '确认重置', cancelButtonText: '取消' },
+    )
+  } catch {
+    return
+  }
+  loading.reset = true
+  try {
+    const data = await resetNotificationState()
+    if (data.view) {
+      Object.assign(form, data.view.config)
+      form.scenarios = [...(data.view.config.scenarios || [])]
+      form.accountIds = [...(data.view.config.accountIds || [])]
+      state.value = data.view.state || {}
+    }
+    ElMessage.success(`已重置，清除 ${data.cleared} 条去重记录`)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.error || e.message || '重置失败')
+  } finally {
+    loading.reset = false
   }
 }
 
@@ -186,7 +214,18 @@ onMounted(load)
 
     <el-card shadow="never" class="page-card">
       <template #header>
-        <div class="card-title">运行状态</div>
+        <div class="row-between">
+          <div class="card-title">运行状态</div>
+          <el-button
+            type="danger"
+            plain
+            :icon="Delete"
+            :loading="loading.reset"
+            @click="onResetState"
+          >
+            重置通知记录
+          </el-button>
+        </div>
       </template>
       <el-descriptions :column="2" border>
         <el-descriptions-item label="上次检查">{{ state.lastRunAt || '—' }}</el-descriptions-item>

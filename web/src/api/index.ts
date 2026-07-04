@@ -426,3 +426,8 @@ export async function runNotification() {
   const { data } = await http.post<{ sent: number; skipped: number; error?: string }>('/notifications/run')
   return data
 }
+
+export async function resetNotificationState() {
+  const { data } = await http.post<{ cleared: number; view: NotificationView }>('/notifications/reset-state')
+  return data
+}
