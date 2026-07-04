@@ -32,6 +32,7 @@ const filters = reactive({
   afterSaleStatus: '',
   afterSaleType: '',
   sid: '',
+  tid: '',
   scenario: '',
   dateRange: [defaultStart, defaultEnd] as [string, string],
   pageNo: 1,
@@ -42,11 +43,15 @@ const scenarioTabs = [
   { key: '', label: '全部售后' },
   { key: 'confirm_receive', label: '待卖家确认收货' },
   { key: 'wait_agree', label: '等待卖家同意' },
+  { key: 'wait_return', label: '待买家退货' },
   { key: 'refund_only', label: '仅退款提醒' },
   { key: 'exchange', label: '换货待处理' },
   { key: 'wait_send_exchange', label: '待发出换货商品' },
   { key: 'return_signed', label: '退回已签收' },
   { key: 'pickup_pending', label: '驿站待取件' },
+  { key: 'seller_refuse', label: '卖家拒绝' },
+  { key: 'refund_close_with_sid', label: '退款关闭(有物流)' },
+  { key: 'refund_success', label: '退款成功' },
   { key: 'urgent', label: '时效紧迫' },
 ]
 
@@ -57,6 +62,7 @@ const statusOptions = [
   { label: '待卖家确认收货', value: 'WAIT_SELLER_CONFIRM_RECEIVE' },
   { label: '待发出换货商品', value: 'WAIT_SEND_EXCHANGE_ITEM' },
   { label: '换货补寄待收货', value: 'WAIT_RECEIVE_EXCHANGE_ITEM' },
+  { label: '卖家拒绝', value: 'SELLER_REFUSE,SELLER_REFUSAL_REFUND' },
   { label: '退款成功', value: 'REFUND_SUCCESS' },
   { label: '售后关闭', value: 'REFUND_CLOSE' },
 ]
@@ -123,7 +129,8 @@ async function loadRefunds() {
       afterSaleStatus: filters.afterSaleStatus || undefined,
       afterSaleType: filters.afterSaleType || undefined,
       sid: filters.sid.trim() || undefined,
-      scenario: filters.sid.trim() ? undefined : filters.scenario || undefined,
+      tid: filters.tid.trim() || undefined,
+      scenario: filters.scenario || undefined,
       startDateTime: startDateTime || undefined,
       endDateTime: endDateTime || undefined,
       pageNo: filters.pageNo,
@@ -292,6 +299,15 @@ onMounted(async () => {
             value-format="YYYY-MM-DD HH:mm:ss"
             :shortcuts="dateShortcuts"
             @change="onFilterChange"
+          />
+        </el-form-item>
+        <el-form-item label="订单号">
+          <el-input
+            v-model="filters.tid"
+            clearable
+            placeholder="平台订单号（需配合申请时间）"
+            style="width: 220px"
+            @keyup.enter="onFilterChange"
           />
         </el-form-item>
         <el-form-item label="退货物流">

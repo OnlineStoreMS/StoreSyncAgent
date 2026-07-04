@@ -537,6 +537,7 @@ type RefundFiltersView struct {
 	ShopID        string `json:"shopId,omitempty"`
 	Scenario      string `json:"scenario,omitempty"`
 	Sid           string `json:"sid,omitempty"`
+	Tid           string `json:"tid,omitempty"`
 }
 
 type RefundStatsView struct {
@@ -573,13 +574,19 @@ func (s *SyncService) ListRefunds(ctx context.Context, q RefundQuery) (*RefundLi
 	}
 
 	rq := s.toRefundQuery(q)
+	hasIDSearch := strings.TrimSpace(q.Sid) != "" || strings.TrimSpace(q.Tid) != "" || strings.TrimSpace(q.SysTid) != ""
 	var result *kdzs.RefundListResult
 	var err error
 
-	if kdzs.ScenarioNeedsFullListScan(q.Scenario) && q.Sid == "" {
+	if kdzs.ScenarioNeedsFullListScan(q.Scenario) && !hasIDSearch {
 		result, err = s.listRefundsByScenario(ctx, platform, q, rq)
 	} else {
 		result, err = s.session.QueryRefunds(ctx, rq)
+		if err == nil && q.Scenario != "" {
+			filtered := filterRefundsByScenario(result.Items, q.Scenario)
+			result.Items = filtered
+			result.Total = len(filtered)
+		}
 		if err == nil {
 			if q.EnrichLogistics || q.Scenario != "" || q.Sid != "" {
 				s.session.EnrichRefundsLogistics(ctx, platform, result.Items, 5)
@@ -595,7 +602,7 @@ func (s *SyncService) ListRefunds(ctx context.Context, q RefundQuery) (*RefundLi
 	}
 
 	stats, _ := s.fetchRefundStats(ctx, platform, q)
-	start, end := kdzs.ResolveRefundSearchDateRange(q.StartDateTime, q.EndDateTime, q.Sid != "")
+	start, end := kdzs.ResolveRefundSearchDateRange(q.StartDateTime, q.EndDateTime, hasIDSearch)
 
 	return &RefundListView{
 		Total:    result.Total,
@@ -612,6 +619,7 @@ func (s *SyncService) ListRefunds(ctx context.Context, q RefundQuery) (*RefundLi
 			ShopID:        q.ShopID,
 			Scenario:      q.Scenario,
 			Sid:           q.Sid,
+			Tid:           q.Tid,
 		},
 		Stats: stats,
 	}, nil
@@ -744,6 +752,55 @@ func (s *SyncService) collectScenarioRefunds(ctx context.Context, platform, scen
 
 	case "urgent":
 		return s.collectUrgentRefunds(ctx, platform, base, now)
+
+	case "wait_return":
+		q := base
+		q.AfterSaleStatusList = []string{"WAIT_BUYER_RETURN_ITEM"}
+		q.AfterSaleTypeList = nil
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		for i := range items {
+			items[i].SLA = kdzs.ComputeRefundSLA(&items[i], nil, now)
+		}
+		return items, nil
+
+	case "refund_success":
+		q := base
+		q.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
+		q.AfterSaleTypeList = nil
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return items, nil
+
+	case "seller_refuse":
+		q := base
+		q.AfterSaleStatusList = []string{"SELLER_REFUSE", "SELLER_REFUSAL_REFUND"}
+		q.AfterSaleTypeList = nil
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		return items, nil
+
+	case "refund_close_with_sid":
+		q := base
+		q.AfterSaleStatusList = []string{"REFUND_CLOSE"}
+		q.AfterSaleTypeList = nil
+		items, _, err := s.session.QueryAllRefunds(ctx, q)
+		if err != nil {
+			return nil, err
+		}
+		filtered := make([]kdzs.RefundItem, 0, len(items))
+		for _, item := range items {
+			if strings.TrimSpace(item.Sid) != "" {
+				filtered = append(filtered, item)
+			}
+		}
+		return filtered, nil
 	}
 
 	var matched []kdzs.RefundItem
@@ -900,12 +957,20 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 			}
 		}
 	}
-	if q.Scenario != "" && len(rq.AfterSaleStatusList) == 0 && q.Sid == "" {
+	if q.Scenario != "" && len(rq.AfterSaleStatusList) == 0 && q.Sid == "" && q.Tid == "" && q.SysTid == "" {
 		switch q.Scenario {
 		case "confirm_receive", "return_signed", "pickup_pending":
 			rq.AfterSaleStatusList = []string{"WAIT_SELLER_CONFIRM_RECEIVE"}
 		case "wait_agree", "refund_only":
 			rq.AfterSaleStatusList = []string{"WAIT_SELLER_AGREE"}
+		case "wait_return":
+			rq.AfterSaleStatusList = []string{"WAIT_BUYER_RETURN_ITEM"}
+		case "refund_success":
+			rq.AfterSaleStatusList = []string{"REFUND_SUCCESS"}
+		case "seller_refuse":
+			rq.AfterSaleStatusList = []string{"SELLER_REFUSE", "SELLER_REFUSAL_REFUND"}
+		case "refund_close_with_sid":
+			rq.AfterSaleStatusList = []string{"REFUND_CLOSE"}
 		}
 		if q.Scenario == "refund_only" {
 			rq.AfterSaleTypeList = []int{1}
@@ -918,6 +983,20 @@ func (s *SyncService) toRefundQuery(q RefundQuery) kdzs.RefundQuery {
 		}
 	}
 	return rq
+}
+
+func filterRefundsByScenario(items []kdzs.RefundItem, scenario string) []kdzs.RefundItem {
+	scenario = strings.TrimSpace(scenario)
+	if scenario == "" {
+		return items
+	}
+	out := make([]kdzs.RefundItem, 0, len(items))
+	for _, item := range items {
+		if kdzs.MatchRefundScenario(item, scenario) {
+			out = append(out, item)
+		}
+	}
+	return out
 }
 
 func (s *SyncService) fetchRefundStats(ctx context.Context, platform string, q RefundQuery) (*RefundStatsView, error) {

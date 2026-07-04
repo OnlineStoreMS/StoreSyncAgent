@@ -258,9 +258,21 @@ func MatchRefundScenario(item RefundItem, scenario string) bool {
 		return sla != nil && sla.IsPickupPending && !sla.IsSigned
 	case "urgent":
 		return IsUrgentSLA(sla)
+	case "wait_return":
+		return item.AfterSaleStatus == "WAIT_BUYER_RETURN_ITEM"
+	case "refund_success":
+		return item.AfterSaleStatus == "REFUND_SUCCESS"
+	case "seller_refuse":
+		return IsSellerRefuseStatus(item.AfterSaleStatus)
+	case "refund_close_with_sid":
+		return item.AfterSaleStatus == "REFUND_CLOSE" && strings.TrimSpace(item.Sid) != ""
 	default:
 		return true
 	}
+}
+
+func IsSellerRefuseStatus(status string) bool {
+	return status == "SELLER_REFUSE" || status == "SELLER_REFUSAL_REFUND"
 }
 
 func activeRefundStatus(status string) bool {

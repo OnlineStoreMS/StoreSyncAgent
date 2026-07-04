@@ -74,6 +74,24 @@ func TestUrgencyLevel(t *testing.T) {
 	}
 }
 
+func TestMatchRefundScenarioExtended(t *testing.T) {
+	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "WAIT_BUYER_RETURN_ITEM"}, "wait_return") {
+		t.Fatal("wait_return")
+	}
+	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_SUCCESS"}, "refund_success") {
+		t.Fatal("refund_success")
+	}
+	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "SELLER_REFUSE"}, "seller_refuse") {
+		t.Fatal("seller_refuse")
+	}
+	if MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_CLOSE"}, "refund_close_with_sid") {
+		t.Fatal("close without sid should not match")
+	}
+	if !MatchRefundScenario(RefundItem{AfterSaleStatus: "REFUND_CLOSE", Sid: "YT123"}, "refund_close_with_sid") {
+		t.Fatal("close with sid should match")
+	}
+}
+
 func TestSortRefundItemsBySLAUrgency(t *testing.T) {
 	items := []RefundItem{
 		{RefundID: "normal", SLA: &RefundSLA{Urgency: "normal", RemainingSeconds: 86400}},
