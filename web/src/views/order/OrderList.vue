@@ -4,6 +4,7 @@ import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { ElMessage } from 'element-plus'
 import { decryptOrders, listOrders, setOrderAgentType, type Order, type OrderFilters, type OrderListResponse } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
+import { copyToClipboard } from '../../utils/clipboard'
 import { dateShortcuts, defaultDateRange } from '../../utils/date'
 
 const kdzsStore = useKdzsStore()
@@ -65,6 +66,23 @@ const filterSummaryTags = computed(() => {
   return tags
 })
 
+const statCards = computed(() => [
+  {
+    label: '待推单',
+    subLabel: '首页统计',
+    value: orderStats.value?.waitingPushTotal,
+    color: '#e6a23c',
+    tradeStatus: 'wait_audit',
+  },
+  {
+    label: '待发货',
+    subLabel: '首页统计',
+    value: orderStats.value?.waitingSendTotal,
+    color: '#409eff',
+    tradeStatus: 'wait_send',
+  },
+])
+
 async function loadOrders() {
   loading.orders = true
   try {
@@ -96,6 +114,14 @@ function onFilterChange() {
   loadOrders()
 }
 
+function onStatCardClick(tradeStatus: string) {
+  if (filters.tradeStatus === tradeStatus) return
+  filters.tradeStatus = tradeStatus
+  filters.pageNo = 1
+  selectedOrders.value = []
+  loadOrders()
+}
+
 function onPageChange(page: number) {
   filters.pageNo = page
   loadOrders()
@@ -123,10 +149,10 @@ function applyDecryptedItems(items: Order[]) {
 }
 
 async function copyText(text: string) {
-  try {
-    await navigator.clipboard.writeText(text)
+  const ok = await copyToClipboard(text)
+  if (ok) {
     ElMessage.success('已复制')
-  } catch {
+  } else {
     ElMessage.error('复制失败')
   }
 }
@@ -316,16 +342,23 @@ onMounted(async () => {
   <div class="order-page">
     <el-card shadow="never" class="page-card" v-if="orderStats">
       <div class="stats-row">
-        <div class="stat-item">
-          <div class="stat-label">待推单（首页统计）</div>
-          <div class="stat-value">{{ orderStats.waitingPushTotal }}</div>
-          <div class="stat-sub muted" v-if="orderStats.waitingPushByPlatform?.FXG">
+        <div
+          v-for="card in statCards"
+          :key="card.tradeStatus"
+          class="stat-item clickable"
+          :class="{ active: filters.tradeStatus === card.tradeStatus }"
+          @click="onStatCardClick(card.tradeStatus)"
+        >
+          <div class="stat-label">{{ card.label }}（{{ card.subLabel }}）</div>
+          <div class="stat-value" :style="{ color: filters.tradeStatus === card.tradeStatus ? card.color : undefined }">
+            {{ card.value ?? '—' }}
+          </div>
+          <div
+            class="stat-sub muted"
+            v-if="card.tradeStatus === 'wait_audit' && orderStats.waitingPushByPlatform?.FXG"
+          >
             抖店 {{ orderStats.waitingPushByPlatform.FXG }}
           </div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-label">待发货（首页统计）</div>
-          <div class="stat-value">{{ orderStats.waitingSendTotal }}</div>
         </div>
       </div>
       <el-alert v-if="orderHint" type="warning" :title="orderHint" show-icon :closable="false" class="hint" />
@@ -631,11 +664,32 @@ onMounted(async () => {
 }
 .stats-row {
   display: flex;
-  gap: 32px;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 12px;
 }
 .stat-item {
   min-width: 120px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.stat-item.clickable {
+  cursor: pointer;
+}
+.stat-item.clickable:hover {
+  background: #f0f7ff;
+  border-color: #c6e2ff;
+}
+.stat-item.active {
+  background: #ecf5ff;
+  border-color: #409eff;
+  box-shadow: 0 0 0 1px #409eff inset;
+}
+.stat-item.active .stat-label {
+  color: #409eff;
 }
 .stat-label {
   color: #606266;
