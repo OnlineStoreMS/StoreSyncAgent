@@ -224,7 +224,7 @@ onMounted(loadList)
         <div>
           <div class="title">退换货管理</div>
           <div class="desc">
-            填写订单号后自动补充店铺、商品、原收件信息等；操作列可<strong>复制补发信息</strong>
+            记录保存在 PostgreSQL（按租户隔离）；填写订单号后自动补充店铺、商品、原收件信息等，操作列可<strong>复制补发信息</strong>
           </div>
         </div>
         <div class="actions">

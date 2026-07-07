@@ -183,6 +183,15 @@ onMounted(load)
         title="通过飞书群机器人 Webhook 推送售后提醒。配置与去重状态保存在 PostgreSQL（按租户隔离）；服务会按设定间隔定时拉取售后并推送。"
       />
 
+      <el-alert
+        v-if="!accountOptions.length"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="hint"
+        title="当前租户尚未配置快递助手账号，请先在「账号管理」添加后再启用通知。"
+      />
+
       <el-form label-width="120px" class="form">
         <el-form-item label="启用通知">
           <el-switch v-model="form.enabled" />
@@ -231,12 +240,13 @@ onMounted(load)
         </el-form-item>
         <el-form-item label="通知账号">
           <div class="account-field">
-            <el-checkbox-group v-model="form.accountIds">
+            <el-checkbox-group v-if="accountOptions.length" v-model="form.accountIds">
               <el-checkbox v-for="acc in accountOptions" :key="acc.id" :label="acc.id">
                 {{ formatAccountTitle(acc) }}
               </el-checkbox>
             </el-checkbox-group>
-            <div class="field-tip muted">不勾选任何账号时，默认扫描 config 中的全部快递助手账号</div>
+            <div v-else class="field-tip muted">暂无已启用的快递助手账号</div>
+            <div v-if="accountOptions.length" class="field-tip muted">不勾选任何账号时，默认扫描当前租户在「账号管理」中已启用的全部快递助手账号</div>
           </div>
         </el-form-item>
         <el-form-item label="通知场景">

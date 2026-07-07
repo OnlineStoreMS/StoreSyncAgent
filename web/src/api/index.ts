@@ -50,6 +50,7 @@ export interface Order {
 }
 
 export interface KdzsAccount {
+  /** 来自 kdzs_accounts 表（当前租户已启用账号） */
   id: string
   name: string
   role: string
@@ -59,6 +60,7 @@ export interface KdzsAccount {
 }
 
 export interface KdzsAccountDetail {
+  /** 账号管理列表项，存于 PostgreSQL */
   code: string
   name: string
   role: string
@@ -425,7 +427,7 @@ export interface NotificationConfig {
   pollIntervalMinutes: number
   dateRangeDays: number
   scenarios: string[]
-  /** 空数组表示全部 config 中的 accounts */
+  /** 空数组表示当前租户已启用的全部 KDZS 账号（来自账号管理） */
   accountIds?: string[]
 }
 

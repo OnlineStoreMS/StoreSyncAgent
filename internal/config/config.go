@@ -38,7 +38,7 @@ type KdzsConfig struct {
 	BaseURL string `mapstructure:"base_url"`
 }
 
-// KdzsAccount is a runtime DTO mapped from kdzs_accounts table rows.
+// KdzsAccount 映射 kdzs_accounts 表记录，供业务层传递账号信息。
 type KdzsAccount struct {
 	ID       string
 	Name     string

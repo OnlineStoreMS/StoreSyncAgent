@@ -118,6 +118,7 @@ func toNotificationConfigView(cfg store.NotificationConfig) NotificationConfigVi
 }
 
 func (s *SyncService) resolveNotificationAccountIDs(cfg store.NotificationConfig) ([]string, error) {
+	// accountIds 为空时，使用当前租户在 kdzs_accounts 中已启用的全部账号（非配置文件）。
 	all, err := s.resolveAccounts()
 	if err != nil {
 		return nil, err
@@ -156,8 +157,12 @@ func (s *SyncService) SaveNotificationConfig(in store.NotificationConfig) (*Noti
 			return nil, fmt.Errorf("unsupported scenario: %s", sc)
 		}
 	}
-	if _, err := s.resolveNotificationAccountIDs(in); err != nil && len(in.AccountIDs) > 0 {
+	accountIDs, err := s.resolveNotificationAccountIDs(in)
+	if err != nil {
 		return nil, err
+	}
+	if in.Enabled && len(accountIDs) == 0 {
+		return nil, fmt.Errorf("请先在「账号管理」添加快递助手账号")
 	}
 	data, err := s.notificationRepo.SaveConfig(s.tenantID, in)
 	if err != nil {
@@ -250,6 +255,11 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 
 	accountIDs, err := s.resolveNotificationAccountIDs(cfg)
 	if err != nil {
+		updateState(false, 0, err.Error(), "")
+		return nil, err
+	}
+	if len(accountIDs) == 0 {
+		err := fmt.Errorf("当前租户无可用快递助手账号，请先在「账号管理」添加")
 		updateState(false, 0, err.Error(), "")
 		return nil, err
 	}

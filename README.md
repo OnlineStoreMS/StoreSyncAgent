@@ -20,7 +20,7 @@ StoreSyncAgent 是 **OSMS** 平台下的电商店铺同步应用，与 StoreCore
 
 ## 配置与部署
 
-业务数据（KDZS 账号、退换货、通知配置）均存 **PostgreSQL**，通过 UserCore 应用中心 SSO 登录。
+业务数据（KDZS 账号、退换货、通知配置）均存 **PostgreSQL**，通过 UserCore 应用中心 SSO 登录。订单/售后/店铺列表仍从快递助手实时拉取。
 
 平台统一部署见 **`deploy` 仓库**：
 

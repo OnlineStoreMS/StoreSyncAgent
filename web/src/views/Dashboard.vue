@@ -294,7 +294,8 @@ onMounted(async () => {
         <el-card shadow="never" class="info-card">
           <div class="info-title">说明</div>
           <ul class="info-list">
-            <li>数据来自快递助手，按需实时拉取，不持久化到本地</li>
+            <li>订单、售后、店铺等数据来自快递助手，按需实时拉取，不在本系统持久化</li>
+            <li>快递助手账号、退换货记录、通知配置保存在 PostgreSQL（按租户隔离）</li>
             <li>抖店订单解密返回虚拟号（主机号-分机号），用于发货联系</li>
             <li>默认查询近 30 天、待推单状态的抖店订单</li>
           </ul>

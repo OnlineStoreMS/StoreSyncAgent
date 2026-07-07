@@ -1,9 +1,8 @@
 configs/config.yaml
 .env
 .env.local
-# data 目录运行时数据（Docker 卷 / 本地持久化），seed 模板仍提交
+# data 目录遗留样例/调试文件（业务数据已存 PostgreSQL）
 data/*
-!data/*.seed.json
 !data/.gitkeep
 show/
 *.exe

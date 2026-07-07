@@ -33,6 +33,7 @@ type KdzsAccountDetail struct {
 }
 
 func (s *SyncService) resolveAccounts() ([]config.KdzsAccount, error) {
+	// 当前租户在 kdzs_accounts 表中已启用的账号（非配置文件）。
 	records, err := s.kdzsRepo.ListAccounts(s.tenantID)
 	if err != nil {
 		return nil, err

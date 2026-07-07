@@ -130,7 +130,7 @@ onMounted(load)
         <div class="row-between">
           <div class="card-title">
             快递助手账号
-            <span class="hint">按当前租户隔离存储，密码保存在数据库</span>
+            <span class="hint">按租户隔离，账号与密码保存在 PostgreSQL</span>
           </div>
           <el-button type="primary" @click="openCreate">添加账号</el-button>
         </div>

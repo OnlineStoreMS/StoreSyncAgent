@@ -13,7 +13,7 @@ type NotificationConfig struct {
 	PollIntervalMinutes int      `json:"pollIntervalMinutes,omitempty"`
 	DateRangeDays       int      `json:"dateRangeDays,omitempty"`
 	Scenarios           []string `json:"scenarios,omitempty"`
-	AccountIDs          []string `json:"accountIds,omitempty"`
+	AccountIDs          []string `json:"accountIds,omitempty"` // 空=当前租户已启用的全部 KDZS 账号
 	AppID               string   `json:"appId,omitempty"`
 	AppSecret           string   `json:"appSecret,omitempty"`
 }
