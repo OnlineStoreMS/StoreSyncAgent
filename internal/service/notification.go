@@ -118,7 +118,10 @@ func toNotificationConfigView(cfg store.NotificationConfig) NotificationConfigVi
 }
 
 func (s *SyncService) resolveNotificationAccountIDs(cfg store.NotificationConfig) ([]string, error) {
-	all := s.cfg.Kdzs.ResolveAccounts()
+	all, err := s.resolveAccounts()
+	if err != nil {
+		return nil, err
+	}
 	if len(cfg.AccountIDs) == 0 {
 		ids := make([]string, 0, len(all))
 		for _, acc := range all {
@@ -137,7 +140,7 @@ func (s *SyncService) resolveNotificationAccountIDs(cfg store.NotificationConfig
 			continue
 		}
 		if _, ok := known[id]; !ok {
-			return nil, fmt.Errorf("account %s not found in config", id)
+			return nil, fmt.Errorf("account %s not found", id)
 		}
 		ids = append(ids, id)
 	}

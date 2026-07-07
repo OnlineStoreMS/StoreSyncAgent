@@ -8,39 +8,53 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	adminmw "storesyncagent/admin/middleware"
+	"storesyncagent/internal/config"
 	"storesyncagent/internal/handler"
+	jwtmgr "storesyncagent/internal/pkg/jwt"
 )
 
-func Setup(h *handler.Handler, webDist string) *gin.Engine {
+func Setup(h *handler.Handler, cfg *config.Config, webDist string) *gin.Engine {
 	r := gin.New()
 	r.Use(gin.Logger(), gin.Recovery())
-	r.Use(corsMiddleware())
+	r.Use(corsMiddleware(cfg))
 
-	api := r.Group("/api/v1")
+	r.GET("/health", h.Health)
+
+	v1 := r.Group("/api/v1")
+	v1.GET("/health", h.Health)
+
+	adminGroup := v1.Group("/admin")
+	jwtMgr := jwtmgr.NewManager(cfg.Auth.JWTSecret)
+	adminGroup.Use(adminmw.AdminAuth(&cfg.Auth, jwtMgr))
 	{
-		api.GET("/health", h.Health)
-		api.GET("/kdzs/status", h.LoginStatus)
-		api.GET("/kdzs/accounts", h.ListAccounts)
-		api.POST("/kdzs/accounts/switch", h.SwitchAccount)
-		api.GET("/shops", h.ListShops)
-		api.GET("/factories", h.ListFactories)
-		api.GET("/orders", h.ListOrders)
-		api.POST("/orders/decrypt", h.DecryptOrders)
-		api.POST("/orders/agent-type", h.SetOrderAgentType)
-		api.GET("/refunds", h.ListRefunds)
-		api.GET("/refunds/stats", h.RefundStats)
-		api.GET("/refunds/logistics", h.RefundLogistics)
-		api.GET("/orders/lookup", h.LookupOrder)
-		api.GET("/return-exchanges", h.ListReturnExchanges)
-		api.POST("/return-exchanges", h.CreateReturnExchange)
-		api.PUT("/return-exchanges/:id", h.UpdateReturnExchange)
-		api.DELETE("/return-exchanges/:id", h.DeleteReturnExchange)
-		api.GET("/notifications", h.GetNotification)
-		api.PUT("/notifications", h.SaveNotification)
-		api.POST("/notifications/test", h.TestNotification)
-		api.POST("/notifications/test-barcode", h.TestBarcodeNotification)
-		api.POST("/notifications/run", h.RunNotification)
-		api.POST("/notifications/reset-state", h.ResetNotificationState)
+		adminGroup.GET("/kdzs/status", h.LoginStatus)
+		adminGroup.GET("/kdzs/accounts", h.ListAccounts)
+		adminGroup.GET("/kdzs/account-details", h.ListKdzsAccountDetails)
+		adminGroup.POST("/kdzs/accounts", h.CreateKdzsAccount)
+		adminGroup.PUT("/kdzs/accounts/:id", h.UpdateKdzsAccount)
+		adminGroup.DELETE("/kdzs/accounts/:id", h.DeleteKdzsAccount)
+		adminGroup.POST("/kdzs/accounts/default", h.SetDefaultKdzsAccount)
+		adminGroup.POST("/kdzs/accounts/switch", h.SwitchAccount)
+		adminGroup.GET("/shops", h.ListShops)
+		adminGroup.GET("/factories", h.ListFactories)
+		adminGroup.GET("/orders", h.ListOrders)
+		adminGroup.POST("/orders/decrypt", h.DecryptOrders)
+		adminGroup.POST("/orders/agent-type", h.SetOrderAgentType)
+		adminGroup.GET("/refunds", h.ListRefunds)
+		adminGroup.GET("/refunds/stats", h.RefundStats)
+		adminGroup.GET("/refunds/logistics", h.RefundLogistics)
+		adminGroup.GET("/orders/lookup", h.LookupOrder)
+		adminGroup.GET("/return-exchanges", h.ListReturnExchanges)
+		adminGroup.POST("/return-exchanges", h.CreateReturnExchange)
+		adminGroup.PUT("/return-exchanges/:id", h.UpdateReturnExchange)
+		adminGroup.DELETE("/return-exchanges/:id", h.DeleteReturnExchange)
+		adminGroup.GET("/notifications", h.GetNotification)
+		adminGroup.PUT("/notifications", h.SaveNotification)
+		adminGroup.POST("/notifications/test", h.TestNotification)
+		adminGroup.POST("/notifications/test-barcode", h.TestBarcodeNotification)
+		adminGroup.POST("/notifications/run", h.RunNotification)
+		adminGroup.POST("/notifications/reset-state", h.ResetNotificationState)
 	}
 
 	mountWebUI(r, webDist)
@@ -65,18 +79,30 @@ func mountWebUI(r *gin.Engine, webDist string) {
 	})
 	r.NoRoute(func(c *gin.Context) {
 		if strings.HasPrefix(c.Request.URL.Path, "/api/") {
-			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+			c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "not found"})
 			return
 		}
 		c.File(indexHTML)
 	})
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func corsMiddleware(cfg *config.Config) gin.HandlerFunc {
+	origins := cfg.CORS.AllowOrigins
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
+		origin := c.GetHeader("Origin")
+		allowed := origin == ""
+		for _, o := range origins {
+			if o == origin || o == "*" {
+				allowed = true
+				break
+			}
+		}
+		if allowed && origin != "" {
+			c.Header("Access-Control-Allow-Origin", origin)
+		}
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		c.Header("Access-Control-Allow-Credentials", "true")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return

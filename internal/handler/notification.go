@@ -5,66 +5,97 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"storesyncagent/internal/pkg/response"
 	"storesyncagent/internal/store"
 )
 
 func (h *Handler) GetNotification(c *gin.Context) {
-	view, err := h.svc.GetNotificationView()
+	svc, err := h.svc(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, view)
+	view, err := svc.GetNotificationView()
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.OK(c, view)
 }
 
 func (h *Handler) SaveNotification(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req store.NotificationConfig
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	view, err := h.svc.SaveNotificationConfig(req)
+	view, err := svc.SaveNotificationConfig(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, view)
+	response.OK(c, view)
 }
 
 func (h *Handler) TestNotification(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
 	var req struct {
 		Text string `json:"text"`
 	}
 	_ = c.ShouldBindJSON(&req)
-	if err := h.svc.TestNotification(c.Request.Context(), req.Text); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+	if err := svc.TestNotification(c.Request.Context(), req.Text); err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	response.OK(c, gin.H{"ok": true})
 }
 
 func (h *Handler) TestBarcodeNotification(c *gin.Context) {
-	if err := h.svc.TestBarcodeNotification(c.Request.Context()); err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error()})
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"ok": true})
+	if err := svc.TestBarcodeNotification(c.Request.Context()); err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
 }
 
 func (h *Handler) RunNotification(c *gin.Context) {
-	result, err := h.svc.RunNotificationPoll(c.Request.Context())
+	svc, err := h.svc(c)
 	if err != nil {
-		c.JSON(http.StatusBadGateway, gin.H{"error": err.Error(), "result": result})
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, result)
+	result, err := svc.RunNotificationPoll(c.Request.Context())
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
 }
 
 func (h *Handler) ResetNotificationState(c *gin.Context) {
-	view, cleared, err := h.svc.ResetNotificationState()
+	svc, err := h.svc(c)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"cleared": cleared, "view": view})
+	view, cleared, err := svc.ResetNotificationState()
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"cleared": cleared, "view": view})
 }

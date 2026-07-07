@@ -2,21 +2,32 @@ server:
   port: 8097
   mode: release
 
+database:
+  driver: sqlite
+  sqlite_path: data/storesyncagent.db
+  seed_from_config: false
+
 storage:
   data_dir: data
 
+auth:
+  enabled: true
+  jwt_secret: "change-me-use-long-random-jwt-secret-in-production"
+
+cors:
+  allow_origins:
+    - "http://localhost:5178"
+    - "http://127.0.0.1:5178"
+    - "http://localhost:5174"
+    - "http://127.0.0.1:5174"
+
+# 全局快递助手 API 地址；各租户账号存数据库（kdzs_accounts 表）
 kdzs:
   base_url: https://df.kdzs.com
-  default_account_id: account_1
-  # password 留空，通过环境变量 KDZS_PASSWORD 或 KDZS_ACCOUNT_{ID}_PASSWORD 注入
-  accounts:
-    - id: account_1
-      name: 商家账号A
-      role: merchant
-      mobile: "13000000001"
-      password: ""
-    - id: account_2
-      name: 商家账号B
-      role: merchant
-      mobile: "13000000002"
-      password: ""
+
+# 可选：首次启动且数据库为空时，从配置导入到 tenant_id=1（默认关闭，建议手动迁移）
+# database:
+#   seed_from_config: true
+# kdzs:
+#   default_account_id: account_1
+#   accounts: [...]

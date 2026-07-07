@@ -3,22 +3,31 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDown, Expand, Fold, Refresh } from '@element-plus/icons-vue'
 import Sidebar from './Sidebar.vue'
+import { portalAppsUrl, portalLoginUrl } from '../utils/auth'
+import { useSessionStore } from '../stores/session'
 import { useKdzsStore } from '../stores/kdzs'
 import { formatAccountSubtitle, formatAccountTitle } from '../utils/account'
 
 const route = useRoute()
 const collapsed = ref(false)
+const sessionStore = useSessionStore()
 const kdzsStore = useKdzsStore()
 
+const userInitial = computed(() => {
+  const name = sessionStore.session?.user.displayName?.trim()
+  return name ? name[0].toUpperCase() : '?'
+})
+
 const breadcrumbs = computed(() => {
-  const title = (route.meta.title as string) || 'StoreSyncAgent'
-  if (route.path.startsWith('/shops')) return ['同步中心', '店铺管理']
-  if (route.path.startsWith('/factories')) return ['同步中心', '厂家管理']
-  if (route.path.startsWith('/orders')) return ['同步中心', '订单列表']
-  if (route.path.startsWith('/return-exchanges')) return ['售后管理', '退换货管理']
-  if (route.path.startsWith('/notifications')) return ['售后管理', '通知管理']
-  if (route.path.startsWith('/refunds')) return ['售后管理', '售后列表']
-  return ['首页', title]
+  const title = (route.meta.title as string) || '电商店铺同步'
+  if (route.path.startsWith('/kdzs-accounts')) return ['OSMS 电商店铺同步', '账号管理']
+  if (route.path.startsWith('/shops')) return ['OSMS 电商店铺同步', '店铺管理']
+  if (route.path.startsWith('/factories')) return ['OSMS 电商店铺同步', '厂家管理']
+  if (route.path.startsWith('/orders')) return ['OSMS 电商店铺同步', '订单列表']
+  if (route.path.startsWith('/return-exchanges')) return ['OSMS 电商店铺同步', '退换货管理']
+  if (route.path.startsWith('/notifications')) return ['OSMS 电商店铺同步', '通知管理']
+  if (route.path.startsWith('/refunds')) return ['OSMS 电商店铺同步', '售后列表']
+  return ['OSMS 电商店铺同步', title]
 })
 
 const activeAccountLabel = computed(() => {
@@ -34,6 +43,7 @@ const activeAccountLabel = computed(() => {
 })
 
 onMounted(async () => {
+  void sessionStore.load()
   await kdzsStore.loadStatus()
   await kdzsStore.loadAccounts()
 })
@@ -46,6 +56,15 @@ async function refreshStatus() {
 async function onSwitchAccount(accountId: string) {
   if (accountId === kdzsStore.loginInfo.accountId) return
   await kdzsStore.switchKdzsAccount(accountId)
+}
+
+function backToPortal() {
+  window.location.href = portalAppsUrl()
+}
+
+function logout() {
+  sessionStore.clear()
+  window.location.href = portalLoginUrl()
 }
 </script>
 
@@ -90,7 +109,7 @@ async function onSwitchAccount(accountId: string) {
                   </div>
                 </el-dropdown-item>
                 <el-dropdown-item v-if="!kdzsStore.accounts.length" disabled>
-                  请在 configs/config.yaml 配置 accounts
+                  请在配置中设置快递助手账号
                 </el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -98,6 +117,23 @@ async function onSwitchAccount(accountId: string) {
           <el-button :icon="Refresh" :loading="kdzsStore.loading.status || kdzsStore.loading.switch" @click="refreshStatus">
             刷新连接
           </el-button>
+          <el-dropdown trigger="click" @command="(cmd: string) => cmd === 'logout' ? logout() : backToPortal()">
+            <div class="user-trigger">
+              <el-avatar :size="32" class="user-avatar">{{ userInitial }}</el-avatar>
+              <div v-if="sessionStore.session" class="user-meta">
+                <span class="user-name">{{ sessionStore.session.user.displayName }}</span>
+                <span class="tenant-name">{{ sessionStore.session.tenant.name }}</span>
+              </div>
+              <span v-else class="user-loading">加载中…</span>
+              <el-icon class="user-arrow"><ArrowDown /></el-icon>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="portal">返回应用中心</el-dropdown-item>
+                <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </header>
       <main class="content">
@@ -146,10 +182,7 @@ async function onSwitchAccount(accountId: string) {
   padding: 4px 8px;
   border-radius: 8px;
   white-space: nowrap;
-  max-width: 360px;
-}
-.account-trigger :deep(.el-tag) {
-  flex-shrink: 0;
+  max-width: 280px;
 }
 .account-trigger:hover {
   background: #f5f7fa;
@@ -172,8 +205,8 @@ async function onSwitchAccount(accountId: string) {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 280px;
-  max-width: 360px;
+  min-width: 240px;
+  max-width: 320px;
   white-space: nowrap;
 }
 .account-option-label {
@@ -184,6 +217,49 @@ async function onSwitchAccount(accountId: string) {
 }
 .account-option-tag {
   flex-shrink: 0;
+}
+.user-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.user-trigger:hover {
+  background: #f5f7fa;
+}
+.user-avatar {
+  background: #409eff;
+  color: #fff;
+  flex-shrink: 0;
+}
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  max-width: 140px;
+}
+.user-name {
+  font-size: 13px;
+  color: #303133;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tenant-name {
+  font-size: 11px;
+  color: #909399;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-loading {
+  font-size: 12px;
+  color: #909399;
+}
+.user-arrow {
+  color: #909399;
 }
 .content {
   flex: 1;

@@ -10,6 +10,11 @@ export default defineConfig({
         target: 'http://localhost:8097',
         changeOrigin: true,
       },
+      '/iam': {
+        target: 'http://localhost:8091',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/iam/, '/api/v1'),
+      },
     },
   },
 })

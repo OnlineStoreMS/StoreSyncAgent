@@ -1,46 +1,28 @@
-.PHONY: init-env init-env-acr up down up-images pull-images login-acr logs ps restart
+.PHONY: run build tidy web-dev web-build init-db fix-db-perms test
 
-COMPOSE := docker compose -f docker-compose.yml
-COMPOSE_ACR := docker compose -f docker-compose.yml -f docker-compose.acr.yml
+run:
+	go run ./cmd/api -config configs/config.yaml
 
-APP_IMAGES := storesyncagent-api storesyncagent-web
+build:
+	GOTMPDIR=.tmp go build -o bin/storesyncagent ./cmd/api
 
-init-env:
-	@test -f .env || cp .env.example .env
-	@test -f configs/config.yaml || cp configs/config.example.yaml configs/config.yaml
-	@echo "已创建 .env 与 configs/config.yaml，请填写快递助手账号与密码"
+tidy:
+	GOTMPDIR=.tmp go mod tidy
 
-init-env-acr:
-	@test -f .env || cp .env.acr.example .env
-	@test -f configs/config.yaml || cp configs/config.example.yaml configs/config.yaml
-	@echo "已创建 .env（ACR 模式）与 configs/config.yaml"
+test:
+	go test ./...
 
-login-acr:
-	@set -a && . ./.env && set +a && \
-	test -n "$$ALIYUN_ACR_REGISTRY" || (echo "请在 .env 配置 ALIYUN_ACR_REGISTRY"; exit 1) && \
-	echo "$$ALIYUN_ACR_PASSWORD" | docker login "$$ALIYUN_ACR_REGISTRY" -u "$$ALIYUN_ACR_USER" --password-stdin
+web-dev:
+	cd web && npm run dev
 
-pull-images: login-acr
-	@set -a && . ./.env && set +a && \
-	for img in $(APP_IMAGES); do \
-	  echo ">>> pull $${ACR_IMAGE_PREFIX}/$$img:$${IMAGE_TAG:-latest}"; \
-	  docker pull "$${ACR_IMAGE_PREFIX}/$$img:$${IMAGE_TAG:-latest}"; \
-	done
+web-build:
+	cd web && npm run build
 
-up: init-env
-	$(COMPOSE) up -d --build
+init-db:
+	@test -n "$(APP_PASSWORD)" || (echo "用法: make init-db APP_PASSWORD=你的密码"; exit 1)
+	chmod +x deploy/setup_db.sh
+	./deploy/setup_db.sh "$(APP_PASSWORD)"
 
-up-images: init-env-acr pull-images
-	$(COMPOSE_ACR) up -d --no-build --remove-orphans
-
-down:
-	$(COMPOSE) down
-
-logs:
-	$(COMPOSE) logs -f
-
-ps:
-	$(COMPOSE) ps
-
-restart:
-	$(COMPOSE) restart
+fix-db-perms:
+	chmod +x deploy/fix_db_permissions.sh
+	./deploy/fix_db_permissions.sh

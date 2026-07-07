@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { HomeFilled, List, OfficeBuilding, Service, Shop } from '@element-plus/icons-vue'
+import { HomeFilled, List, OfficeBuilding, Service, Shop, User } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -11,6 +11,7 @@ const activeMenu = computed(() => route.path)
 
 const menuItems = [
   { path: '/dashboard', title: '工作台', icon: HomeFilled },
+  { path: '/kdzs-accounts', title: '账号管理', icon: User },
   { path: '/shops', title: '店铺管理', icon: Shop },
   { path: '/factories', title: '厂家管理', icon: OfficeBuilding },
   { path: '/orders', title: '订单列表', icon: List },
@@ -22,7 +23,7 @@ const afterSaleItems = [
   { path: '/notifications', title: '通知管理' },
 ]
 
-const logoText = computed(() => (collapsed.value ? 'SSA' : 'StoreSyncAgent'))
+const logoText = computed(() => (collapsed.value ? '店同' : '电商店铺同步'))
 
 function navigate(path: string) {
   router.push(path)
@@ -31,10 +32,7 @@ function navigate(path: string) {
 
 <template>
   <aside class="sidebar" :class="{ collapsed }">
-    <div class="logo">
-      <span class="logo-mark">SS</span>
-      <span v-if="!collapsed" class="logo-text">{{ logoText }}</span>
-    </div>
+    <div class="logo">{{ logoText }}</div>
     <el-menu
       :default-active="activeMenu"
       :collapse="collapsed"
@@ -66,7 +64,7 @@ function navigate(path: string) {
         </el-menu-item>
       </el-sub-menu>
     </el-menu>
-    <div v-if="!collapsed" class="sidebar-footer">快递助手 · 店铺订单同步</div>
+    <div v-if="!collapsed" class="sidebar-footer">OSMS · 电商店铺同步</div>
   </aside>
 </template>
 
@@ -87,28 +85,10 @@ function navigate(path: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
   color: #fff;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 16px;
   border-bottom: 1px solid #ffffff14;
-  padding: 0 12px;
-}
-.logo-mark {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #409eff, #337ecc);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 13px;
-  flex-shrink: 0;
-}
-.logo-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 .sidebar :deep(.el-menu) {
   border-right: none;

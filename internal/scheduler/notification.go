@@ -9,13 +9,13 @@ import (
 )
 
 type NotificationScheduler struct {
-	svc    *service.SyncService
+	mgr    *service.Manager
 	stopCh chan struct{}
 }
 
-func NewNotificationScheduler(svc *service.SyncService) *NotificationScheduler {
+func NewNotificationScheduler(mgr *service.Manager) *NotificationScheduler {
 	return &NotificationScheduler{
-		svc:    svc,
+		mgr:    mgr,
 		stopCh: make(chan struct{}),
 	}
 }
@@ -29,7 +29,6 @@ func (s *NotificationScheduler) Stop() {
 }
 
 func (s *NotificationScheduler) loop() {
-	// 启动后延迟 30 秒首次检查，避免与 API 启动争抢资源。
 	timer := time.NewTimer(30 * time.Second)
 	defer timer.Stop()
 
@@ -39,23 +38,23 @@ func (s *NotificationScheduler) loop() {
 			return
 		case <-timer.C:
 			s.runOnce()
-			timer.Reset(s.svc.NotificationPollInterval())
+			timer.Reset(s.mgr.NotificationPollInterval())
 		}
 	}
 }
 
 func (s *NotificationScheduler) runOnce() {
-	if !s.svc.NotificationEnabled() {
+	if !s.mgr.NotificationEnabled() {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	result, err := s.svc.RunNotificationPoll(ctx)
+	sent, skipped, err := s.mgr.RunNotificationPollForAll(ctx)
 	if err != nil {
 		log.Printf("[notification] poll failed: %v", err)
 		return
 	}
-	if result.Sent > 0 {
-		log.Printf("[notification] sent %d message(s), skipped %d", result.Sent, result.Skipped)
+	if sent > 0 {
+		log.Printf("[notification] sent %d message(s), skipped %d", sent, skipped)
 	}
 }

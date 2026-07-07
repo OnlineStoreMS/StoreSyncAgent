@@ -69,7 +69,7 @@ export const useKdzsStore = defineStore('kdzs', () => {
         roleLabel: loginInfo.value.accountRoleLabel,
       })}`)
     } catch (e: any) {
-      ElMessage.error(e?.response?.data?.error || e.message || '切换账号失败')
+      ElMessage.error(e?.message || '切换账号失败')
       throw e
     } finally {
       loading.value.switch = false

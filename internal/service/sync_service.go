@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,11 +13,17 @@ import (
 	"storesyncagent/internal/config"
 	"storesyncagent/internal/feishu"
 	"storesyncagent/internal/kdzs"
+	"storesyncagent/internal/model"
+	"storesyncagent/internal/repo"
 	"storesyncagent/internal/store"
 )
 
 type SyncService struct {
 	cfg                 *config.Config
+	tenantID            uint64
+	globalBaseURL       string
+	kdzsRepo            *repo.KdzsRepo
+	settings            *model.TenantKdzsSetting
 	client              *kdzs.Client
 	session             *kdzs.Session
 	mu                  sync.Mutex
@@ -26,11 +33,34 @@ type SyncService struct {
 	feishuClient        *feishu.Client
 }
 
-func NewSyncService(cfg *config.Config) (*SyncService, error) {
-	client := kdzs.NewClient(cfg.Kdzs.BaseURL)
-	dataDir := cfg.Storage.DataDir
-	if dataDir == "" {
-		dataDir = "data"
+func NewSyncService(baseCfg *config.Config, tenantID uint64, kdzsRepo *repo.KdzsRepo) (*SyncService, error) {
+	dataDir := baseCfg.TenantDataDir(tenantID)
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("data dir: %w", err)
+	}
+	globalBaseURL := baseCfg.Kdzs.BaseURL
+	if globalBaseURL == "" {
+		globalBaseURL = "https://df.kdzs.com"
+	}
+	tenantCfg := &config.Config{
+		Server:  baseCfg.Server,
+		Storage: config.StorageConfig{DataDir: dataDir},
+	}
+	svc := &SyncService{
+		cfg:             tenantCfg,
+		tenantID:        tenantID,
+		globalBaseURL:   globalBaseURL,
+		kdzsRepo:        kdzsRepo,
+		feishuClient:    feishu.NewClient(),
+	}
+	if err := svc.loadSettings(); err != nil {
+		return nil, fmt.Errorf("kdzs settings: %w", err)
+	}
+	svc.client = kdzs.NewClient(svc.kdzsBaseURL())
+	svc.session = kdzs.NewSession(svc.client)
+	if err := svc.ensureDefaultActiveAccount(); err != nil {
+		// allow tenant without accounts until first login attempt
+		svc.activeAccountID = ""
 	}
 	storePath := filepath.Join(dataDir, "return-exchanges.json")
 	seedPath := filepath.Join(dataDir, "return-exchanges.seed.json")
@@ -43,28 +73,24 @@ func NewSyncService(cfg *config.Config) (*SyncService, error) {
 	if err != nil {
 		return nil, fmt.Errorf("notification store: %w", err)
 	}
-	svc := &SyncService{
-		cfg:                 cfg,
-		client:              client,
-		session:             kdzs.NewSession(client),
-		activeAccountID:     cfg.Kdzs.ActiveAccountID(),
-		returnExchangeStore: rexStore,
-		notificationStore:   notifyStore,
-		feishuClient:        feishu.NewClient(),
-	}
+	svc.returnExchangeStore = rexStore
+	svc.notificationStore = notifyStore
 	return svc, nil
 }
 
 func (s *SyncService) activeAccount() (config.KdzsAccount, error) {
-	acc, ok := s.cfg.Kdzs.AccountByID(s.activeAccountID)
+	if err := s.ensureDefaultActiveAccount(); err != nil {
+		return config.KdzsAccount{}, err
+	}
+	acc, ok := s.accountByCode(s.activeAccountID)
 	if !ok {
 		return config.KdzsAccount{}, fmt.Errorf("account %s not found", s.activeAccountID)
 	}
-	if acc.Password == "" {
-		acc.Password = s.cfg.Kdzs.Password
-	}
 	if acc.Mobile == "" {
 		return config.KdzsAccount{}, fmt.Errorf("account mobile is empty")
+	}
+	if acc.Password == "" {
+		return config.KdzsAccount{}, fmt.Errorf("account password is empty")
 	}
 	return acc, nil
 }
@@ -85,15 +111,15 @@ func (s *SyncService) ensureLogin(ctx context.Context) error {
 
 // switchSessionAccount 切换 KDZS 会话到指定账号，不改变 Web 当前选中的 activeAccountID。
 func (s *SyncService) switchSessionAccount(ctx context.Context, accountID string) (config.KdzsAccount, error) {
-	acc, ok := s.cfg.Kdzs.AccountByID(accountID)
+	acc, ok := s.accountByCode(accountID)
 	if !ok {
 		return config.KdzsAccount{}, fmt.Errorf("account %s not found", accountID)
 	}
-	if acc.Password == "" {
-		acc.Password = s.cfg.Kdzs.Password
-	}
 	if acc.Mobile == "" {
 		return config.KdzsAccount{}, fmt.Errorf("account %s mobile is empty", accountID)
+	}
+	if acc.Password == "" {
+		return config.KdzsAccount{}, fmt.Errorf("account %s password is empty", accountID)
 	}
 	if err := s.session.SwitchAccount(ctx, acc.ID, acc.Name, acc.Role, acc.Mobile, acc.Password); err != nil {
 		return config.KdzsAccount{}, err
@@ -424,8 +450,12 @@ func accountRoleLabel(role string) string {
 }
 
 func (s *SyncService) ListAccounts() []KdzsAccountView {
-	items := make([]KdzsAccountView, 0, len(s.cfg.Kdzs.ResolveAccounts()))
-	for _, acc := range s.cfg.Kdzs.ResolveAccounts() {
+	items := make([]KdzsAccountView, 0)
+	accounts, err := s.resolveAccounts()
+	if err != nil {
+		return items
+	}
+	for _, acc := range accounts {
 		items = append(items, KdzsAccountView{
 			ID:        acc.ID,
 			Name:      acc.Name,
@@ -439,16 +469,14 @@ func (s *SyncService) ListAccounts() []KdzsAccountView {
 }
 
 func (s *SyncService) SwitchAccount(ctx context.Context, accountID string) (map[string]any, error) {
-	acc, ok := s.cfg.Kdzs.AccountByID(accountID)
+	acc, ok := s.accountByCode(accountID)
 	if !ok {
 		return nil, fmt.Errorf("account %s not found", accountID)
-	}
-	if acc.Password == "" {
-		acc.Password = s.cfg.Kdzs.Password
 	}
 	s.mu.Lock()
 	s.activeAccountID = accountID
 	s.mu.Unlock()
+	_ = s.kdzsRepo.UpdateActiveAccount(s.tenantID, accountID)
 	if err := s.session.SwitchAccount(ctx, acc.ID, acc.Name, acc.Role, acc.Mobile, acc.Password); err != nil {
 		return nil, err
 	}

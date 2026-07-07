@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 
 	"storesyncagent/internal/config"
+	"storesyncagent/internal/database"
 	"storesyncagent/internal/handler"
+	"storesyncagent/internal/repo"
 	"storesyncagent/internal/router"
 	"storesyncagent/internal/scheduler"
 	"storesyncagent/internal/service"
@@ -28,22 +30,29 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := cfg.Kdzs.Validate(); err != nil {
-		log.Fatal(err)
-	}
 
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
-	svc, err := service.NewSyncService(cfg)
+	db, err := database.Connect(&cfg.Database)
 	if err != nil {
 		log.Fatal(err)
 	}
-	h := handler.New(svc)
-	notifyScheduler := scheduler.NewNotificationScheduler(svc)
+	if err := database.AutoMigrate(db); err != nil {
+		log.Fatal(err)
+	}
+	if cfg.Database.SeedFromConfig {
+		database.SeedLegacyAccounts(db, cfg)
+	}
+	log.Printf("database connected: driver=%s", cfg.Database.Driver)
+
+	kdzsRepo := repo.NewKdzs(db)
+	mgr := service.NewManager(cfg, kdzsRepo)
+	h := handler.New(mgr)
+	notifyScheduler := scheduler.NewNotificationScheduler(mgr)
 	notifyScheduler.Start()
-	engine := router.Setup(h, *webDist)
+	engine := router.Setup(h, cfg, *webDist)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	log.Printf("StoreSyncAgent API listening on http://localhost%s", addr)

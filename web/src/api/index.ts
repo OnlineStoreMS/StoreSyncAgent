@@ -1,6 +1,4 @@
-import axios from 'axios'
-
-const http = axios.create({ baseURL: '/api/v1', timeout: 60000 })
+import http, { unwrap } from './client'
 
 export interface Shop {
   id: number
@@ -60,6 +58,19 @@ export interface KdzsAccount {
   active: boolean
 }
 
+export interface KdzsAccountDetail {
+  code: string
+  name: string
+  role: string
+  roleLabel: string
+  mobile: string
+  enabled: boolean
+  sortOrder: number
+  passwordSet: boolean
+  active: boolean
+  isDefault: boolean
+}
+
 export interface FactoryItem {
   id: number
   factoryId: string
@@ -107,13 +118,11 @@ export interface OrderListResponse {
 }
 
 export async function getLoginStatus() {
-  const { data } = await http.get('/kdzs/status')
-  return data
+  return unwrap(await http.get('/kdzs/status'))
 }
 
 export async function listShops() {
-  const { data } = await http.get<{ items: Shop[]; total: number }>('/shops')
-  return data
+  return unwrap(await http.get<{ items: Shop[]; total: number }>('/shops'))
 }
 
 export async function listOrders(params: {
@@ -126,8 +135,7 @@ export async function listOrders(params: {
   startDateTime?: string
   endDateTime?: string
 }) {
-  const { data } = await http.get<OrderListResponse>('/orders', { params })
-  return data
+  return unwrap(await http.get<OrderListResponse>('/orders', { params }))
 }
 
 export async function decryptOrders(body: {
@@ -135,23 +143,52 @@ export async function decryptOrders(body: {
   tradeStatus?: string
   sysTids: string[]
 }) {
-  const { data } = await http.post<{ items: Order[] }>('/orders/decrypt', body)
-  return data
+  return unwrap(await http.post<{ items: Order[] }>('/orders/decrypt', body))
 }
 
 export async function listAccounts() {
-  const { data } = await http.get<{ items: KdzsAccount[] }>('/kdzs/accounts')
-  return data
+  return unwrap(await http.get<{ items: KdzsAccount[] }>('/kdzs/accounts'))
+}
+
+export async function listKdzsAccountDetails() {
+  return unwrap(await http.get<{ items: KdzsAccountDetail[]; total: number }>('/kdzs/account-details'))
+}
+
+export async function createKdzsAccount(body: {
+  code: string
+  name?: string
+  role?: string
+  mobile: string
+  password: string
+  enabled?: boolean
+}) {
+  return unwrap(await http.post<KdzsAccountDetail>('/kdzs/accounts', body))
+}
+
+export async function updateKdzsAccount(code: string, body: {
+  name?: string
+  role?: string
+  mobile?: string
+  password?: string
+  enabled?: boolean
+}) {
+  return unwrap(await http.put<KdzsAccountDetail>(`/kdzs/accounts/${code}`, body))
+}
+
+export async function deleteKdzsAccount(code: string) {
+  return unwrap(await http.delete<{ ok: boolean }>(`/kdzs/accounts/${code}`))
+}
+
+export async function setDefaultKdzsAccount(accountId: string) {
+  return unwrap(await http.post<{ ok: boolean }>('/kdzs/accounts/default', { accountId }))
 }
 
 export async function switchAccount(accountId: string) {
-  const { data } = await http.post('/kdzs/accounts/switch', { accountId })
-  return data
+  return unwrap(await http.post('/kdzs/accounts/switch', { accountId }))
 }
 
 export async function listFactories(params: { platform?: string; pageNo?: number; pageSize?: number }) {
-  const { data } = await http.get<{ total: number; pageNo: number; pageSize: number; items: FactoryItem[] }>('/factories', { params })
-  return data
+  return unwrap(await http.get<{ total: number; pageNo: number; pageSize: number; items: FactoryItem[] }>('/factories', { params }))
 }
 
 export async function setOrderAgentType(body: {
@@ -161,8 +198,7 @@ export async function setOrderAgentType(body: {
   factoryId?: string
   sysTids: string[]
 }) {
-  const { data } = await http.post<AgentTypeResult>('/orders/agent-type', body)
-  return data
+  return unwrap(await http.post<AgentTypeResult>('/orders/agent-type', body))
 }
 
 export interface RefundGoods {
@@ -294,8 +330,7 @@ export async function listRefunds(params: {
   scenario?: string
   enrichLogistics?: boolean
 }) {
-  const { data } = await http.get<RefundListResponse>('/refunds', { params })
-  return data
+  return unwrap(await http.get<RefundListResponse>('/refunds', { params }))
 }
 
 export async function getRefundStats(params: {
@@ -304,13 +339,11 @@ export async function getRefundStats(params: {
   startDateTime?: string
   endDateTime?: string
 }) {
-  const { data } = await http.get<RefundStats>('/refunds/stats', { params })
-  return data
+  return unwrap(await http.get<RefundStats>('/refunds/stats', { params }))
 }
 
 export async function getRefundLogistics(params: { platform?: string; sid: string; sidCode?: string }) {
-  const { data } = await http.get<LogisticsDetail>('/refunds/logistics', { params })
-  return data
+  return unwrap(await http.get<LogisticsDetail>('/refunds/logistics', { params }))
 }
 
 export interface ReturnExchangeRecord {
@@ -356,28 +389,23 @@ export interface OrderLookup {
 }
 
 export async function listReturnExchanges() {
-  const { data } = await http.get<{ items: ReturnExchangeRecord[]; total: number }>('/return-exchanges')
-  return data
+  return unwrap(await http.get<{ items: ReturnExchangeRecord[]; total: number }>('/return-exchanges'))
 }
 
 export async function createReturnExchange(body: Partial<ReturnExchangeRecord>) {
-  const { data } = await http.post<ReturnExchangeRecord>('/return-exchanges', body)
-  return data
+  return unwrap(await http.post<ReturnExchangeRecord>('/return-exchanges', body))
 }
 
 export async function updateReturnExchange(id: string, body: Partial<ReturnExchangeRecord>) {
-  const { data } = await http.put<ReturnExchangeRecord>(`/return-exchanges/${id}`, body)
-  return data
+  return unwrap(await http.put<ReturnExchangeRecord>(`/return-exchanges/${id}`, body))
 }
 
 export async function deleteReturnExchange(id: string) {
-  const { data } = await http.delete<{ ok: boolean }>(`/return-exchanges/${id}`)
-  return data
+  return unwrap(await http.delete<{ ok: boolean }>(`/return-exchanges/${id}`))
 }
 
 export async function lookupOrder(params: { orderNo: string; platform?: string }) {
-  const { data } = await http.get<OrderLookup>('/orders/lookup', { params })
-  return data
+  return unwrap(await http.get<OrderLookup>('/orders/lookup', { params }))
 }
 
 export interface NotificationScenarioOption {
@@ -417,31 +445,25 @@ export interface NotificationView {
 }
 
 export async function getNotification() {
-  const { data } = await http.get<NotificationView>('/notifications')
-  return data
+  return unwrap(await http.get<NotificationView>('/notifications'))
 }
 
 export async function saveNotification(body: NotificationConfig) {
-  const { data } = await http.put<NotificationView>('/notifications', body)
-  return data
+  return unwrap(await http.put<NotificationView>('/notifications', body))
 }
 
 export async function testNotification(text?: string) {
-  const { data } = await http.post<{ ok: boolean }>('/notifications/test', { text })
-  return data
+  return unwrap(await http.post<{ ok: boolean }>('/notifications/test', { text }))
 }
 
 export async function testBarcodeNotification() {
-  const { data } = await http.post<{ ok: boolean }>('/notifications/test-barcode')
-  return data
+  return unwrap(await http.post<{ ok: boolean }>('/notifications/test-barcode'))
 }
 
 export async function runNotification() {
-  const { data } = await http.post<{ sent: number; skipped: number; barcodeWarnings?: number; lastBarcodeError?: string; error?: string }>('/notifications/run')
-  return data
+  return unwrap(await http.post<{ sent: number; skipped: number; barcodeWarnings?: number; lastBarcodeError?: string; error?: string }>('/notifications/run'))
 }
 
 export async function resetNotificationState() {
-  const { data } = await http.post<{ cleared: number; view: NotificationView }>('/notifications/reset-state')
-  return data
+  return unwrap(await http.post<{ cleared: number; view: NotificationView }>('/notifications/reset-state'))
 }

@@ -3,15 +3,41 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/viper"
 )
 
 type Config struct {
-	Server  ServerConfig  `mapstructure:"server"`
-	Kdzs    KdzsConfig    `mapstructure:"kdzs"`
-	Storage StorageConfig `mapstructure:"storage"`
+	Server   ServerConfig            `mapstructure:"server"`
+	Database DatabaseConfig          `mapstructure:"database"`
+	Kdzs     KdzsConfig              `mapstructure:"kdzs"`
+	Storage  StorageConfig           `mapstructure:"storage"`
+	Auth     AuthConfig              `mapstructure:"auth"`
+	CORS     CORSConfig              `mapstructure:"cors"`
+	Tenants  map[string]TenantConfig `mapstructure:"tenants"`
+}
+
+type DatabaseConfig struct {
+	Driver         string `mapstructure:"driver"`
+	SQLitePath     string `mapstructure:"sqlite_path"`
+	PostgresDSN    string `mapstructure:"postgres_dsn"`
+	SeedFromConfig bool   `mapstructure:"seed_from_config"`
+}
+
+type AuthConfig struct {
+	Enabled   bool   `mapstructure:"enabled"`
+	JWTSecret string `mapstructure:"jwt_secret"`
+}
+
+type CORSConfig struct {
+	AllowOrigins []string `mapstructure:"allow_origins"`
+}
+
+type TenantConfig struct {
+	Kdzs *KdzsConfig `mapstructure:"kdzs"`
 }
 
 type StorageConfig struct {
@@ -92,6 +118,47 @@ func (c *KdzsConfig) ActiveAccount() (KdzsAccount, error) {
 	return acc, nil
 }
 
+func (c *Config) TenantDataDir(tenantID uint64) string {
+	base := c.Storage.DataDir
+	if base == "" {
+		base = "data"
+	}
+	return filepath.Join(base, "tenants", strconv.FormatUint(tenantID, 10))
+}
+
+func (c *Config) KdzsForTenant(tenantID uint64) KdzsConfig {
+	key := strconv.FormatUint(tenantID, 10)
+	if t, ok := c.Tenants[key]; ok && t.Kdzs != nil && len(t.Kdzs.ResolveAccounts()) > 0 {
+		kdzs := *t.Kdzs
+		if kdzs.BaseURL == "" {
+			kdzs.BaseURL = c.Kdzs.BaseURL
+		}
+		applyEnvSecretsToKdzs(&kdzs, c.Kdzs.Password)
+		return kdzs
+	}
+	return c.Kdzs
+}
+
+func (c *Config) ConfiguredTenantIDs() []uint64 {
+	seen := make(map[uint64]struct{})
+	var ids []uint64
+	for key := range c.Tenants {
+		id, err := strconv.ParseUint(key, 10, 64)
+		if err != nil || id == 0 {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	if len(ids) == 0 && len(c.Kdzs.ResolveAccounts()) > 0 {
+		ids = append(ids, 1)
+	}
+	return ids
+}
+
 func (c *KdzsConfig) Validate() error {
 	accounts := c.ResolveAccounts()
 	if len(accounts) == 0 {
@@ -136,26 +203,56 @@ func Load(path string) (*Config, error) {
 	if cfg.Kdzs.BaseURL == "" {
 		cfg.Kdzs.BaseURL = "https://df.kdzs.com"
 	}
+	if cfg.Storage.DataDir == "" {
+		cfg.Storage.DataDir = "data"
+	}
+	if cfg.Database.Driver == "" {
+		cfg.Database.Driver = "sqlite"
+	}
+	if cfg.Database.SQLitePath == "" {
+		cfg.Database.SQLitePath = filepath.Join(cfg.Storage.DataDir, "storesyncagent.db")
+	}
+	if len(cfg.CORS.AllowOrigins) == 0 {
+		cfg.CORS.AllowOrigins = []string{
+			"http://localhost:5178",
+			"http://127.0.0.1:5178",
+			"http://localhost:5174",
+			"http://127.0.0.1:5174",
+		}
+	}
 	applyEnvSecrets(&cfg)
 	return &cfg, nil
 }
 
 func applyEnvSecrets(cfg *Config) {
+	applyEnvSecretsToKdzs(&cfg.Kdzs, "")
+	for key, tenant := range cfg.Tenants {
+		if tenant.Kdzs == nil {
+			continue
+		}
+		applyEnvSecretsToKdzs(tenant.Kdzs, cfg.Kdzs.Password)
+		cfg.Tenants[key] = tenant
+	}
+}
+
+func applyEnvSecretsToKdzs(kdzs *KdzsConfig, fallbackPassword string) {
 	if pwd := os.Getenv("KDZS_PASSWORD"); pwd != "" {
-		cfg.Kdzs.Password = pwd
+		kdzs.Password = pwd
+	} else if kdzs.Password == "" && fallbackPassword != "" {
+		kdzs.Password = fallbackPassword
 	}
 	if mobile := os.Getenv("KDZS_MOBILE"); mobile != "" {
-		cfg.Kdzs.Mobile = mobile
+		kdzs.Mobile = mobile
 	}
-	for i := range cfg.Kdzs.Accounts {
-		acc := &cfg.Kdzs.Accounts[i]
+	for i := range kdzs.Accounts {
+		acc := &kdzs.Accounts[i]
 		if acc.Password != "" {
 			continue
 		}
 		if pwd := os.Getenv(accountPasswordEnvKey(acc.ID)); pwd != "" {
 			acc.Password = pwd
-		} else if cfg.Kdzs.Password != "" {
-			acc.Password = cfg.Kdzs.Password
+		} else if kdzs.Password != "" {
+			acc.Password = kdzs.Password
 		}
 	}
 }
