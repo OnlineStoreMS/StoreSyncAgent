@@ -45,7 +45,6 @@ func Setup(h *handler.Handler, cfg *config.Config, webDist string) *gin.Engine {
 		adminGroup.GET("/refunds/stats", h.RefundStats)
 		adminGroup.GET("/refunds/logistics", h.RefundLogistics)
 		adminGroup.GET("/orders/lookup", h.LookupOrder)
-		adminGroup.POST("/orders/lookup-tracking", h.LookupOrdersByTracking)
 		adminGroup.GET("/return-exchanges", h.ListReturnExchanges)
 		adminGroup.POST("/return-exchanges", h.CreateReturnExchange)
 		adminGroup.PUT("/return-exchanges/:id", h.UpdateReturnExchange)
