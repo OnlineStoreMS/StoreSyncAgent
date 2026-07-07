@@ -20,14 +20,7 @@ const userInitial = computed(() => {
 
 const breadcrumbs = computed(() => {
   const title = (route.meta.title as string) || '电商店铺同步'
-  if (route.path.startsWith('/kdzs-accounts')) return ['OSMS 电商店铺同步', '账号管理']
-  if (route.path.startsWith('/shops')) return ['OSMS 电商店铺同步', '店铺管理']
-  if (route.path.startsWith('/factories')) return ['OSMS 电商店铺同步', '厂家管理']
-  if (route.path.startsWith('/orders')) return ['OSMS 电商店铺同步', '订单列表']
-  if (route.path.startsWith('/return-exchanges')) return ['OSMS 电商店铺同步', '退换货管理']
-  if (route.path.startsWith('/notifications')) return ['OSMS 电商店铺同步', '通知管理']
-  if (route.path.startsWith('/refunds')) return ['OSMS 电商店铺同步', '售后列表']
-  return ['OSMS 电商店铺同步', title]
+  return ['OSMS 店铺同步', title]
 })
 
 const activeAccountLabel = computed(() => {

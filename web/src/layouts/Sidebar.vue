@@ -23,7 +23,7 @@ const afterSaleItems = [
   { path: '/notifications', title: '通知管理' },
 ]
 
-const logoText = computed(() => (collapsed.value ? '店同' : '电商店铺同步'))
+const logoText = computed(() => (collapsed.value ? 'SS' : 'StoreSyncAgent'))
 
 function navigate(path: string) {
   router.push(path)
@@ -64,7 +64,6 @@ function navigate(path: string) {
         </el-menu-item>
       </el-sub-menu>
     </el-menu>
-    <div v-if="!collapsed" class="sidebar-footer">OSMS · 电商店铺同步</div>
   </aside>
 </template>
 
@@ -74,8 +73,6 @@ function navigate(path: string) {
   background: #001529;
   transition: width 0.2s;
   flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
 }
 .sidebar.collapsed {
   width: 64px;
@@ -92,13 +89,5 @@ function navigate(path: string) {
 }
 .sidebar :deep(.el-menu) {
   border-right: none;
-  flex: 1;
-}
-.sidebar-footer {
-  padding: 12px 16px;
-  font-size: 11px;
-  color: #ffffff59;
-  border-top: 1px solid #ffffff14;
-  line-height: 1.4;
 }
 </style>

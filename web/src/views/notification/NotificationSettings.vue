@@ -79,7 +79,7 @@ async function onSave() {
 async function onTest() {
   loading.test = true
   try {
-    await testNotification('【StoreSyncAgent】飞书通知测试消息')
+    await testNotification('【电商店铺同步】飞书通知测试消息')
     ElMessage.success('测试消息已发送')
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.error || e.message || '测试失败')
