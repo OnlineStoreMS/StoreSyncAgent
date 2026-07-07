@@ -3,22 +3,34 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
-	"os"
+	"log"
 
 	"storesyncagent/internal/config"
 	"storesyncagent/internal/kdzs"
 )
 
 func main() {
-	cfg, _ := config.Load("configs/config.yaml")
-	if p := os.Getenv("KDZS_PASSWORD"); p != "" {
-		cfg.Kdzs.Password = p
+	configPath := flag.String("config", "configs/config.yaml", "config file path")
+	mobile := flag.String("mobile", "", "KDZS mobile (required)")
+	password := flag.String("password", "", "KDZS password (required)")
+	flag.Parse()
+
+	if *mobile == "" || *password == "" {
+		log.Fatal("usage: refundprobe -mobile MOBILE -password PASSWORD [-config configs/config.yaml]")
+	}
+
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		log.Fatal(err)
 	}
 	client := kdzs.NewClient(cfg.Kdzs.BaseURL)
 	s := kdzs.NewSession(client)
 	ctx := context.Background()
-	_ = s.EnsureLogin(ctx, cfg.Kdzs.Mobile, cfg.Kdzs.Password)
+	if err := s.EnsureLogin(ctx, *mobile, *password); err != nil {
+		log.Fatal(err)
+	}
 	ps, _ := s.PlatformSession(ctx, "FXG")
 	start, end := kdzs.DefaultDateRange()
 	shopList, _ := client.ListEcommerceShops(ctx)

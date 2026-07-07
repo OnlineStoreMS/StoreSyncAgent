@@ -3,12 +3,8 @@ server:
   mode: release
 
 database:
-  driver: sqlite
-  sqlite_path: data/storesyncagent.db
-  seed_from_config: false
-
-storage:
-  data_dir: data
+  driver: postgres
+  postgres_dsn: "host=POSTGRES_HOST user=storesyncagent password=CHANGE_ME dbname=storesyncagent port=5432 sslmode=disable TimeZone=Asia/Shanghai"
 
 auth:
   enabled: true
@@ -21,13 +17,6 @@ cors:
     - "http://localhost:5174"
     - "http://127.0.0.1:5174"
 
-# 全局快递助手 API 地址；各租户账号存数据库（kdzs_accounts 表）
+# 全局快递助手 API 地址；各租户账号在「账号管理」维护（kdzs_accounts 表）
 kdzs:
   base_url: https://df.kdzs.com
-
-# 可选：首次启动且数据库为空时，从配置导入到 tenant_id=1（默认关闭，建议手动迁移）
-# database:
-#   seed_from_config: true
-# kdzs:
-#   default_account_id: account_1
-#   accounts: [...]

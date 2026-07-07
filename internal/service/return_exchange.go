@@ -200,29 +200,29 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (s *SyncService) ListReturnExchanges() ([]store.ReturnExchangeRecord, error) {
-	if s.returnExchangeStore == nil {
-		return nil, fmt.Errorf("return exchange store not configured")
+	if s.returnExchangeRepo == nil {
+		return nil, fmt.Errorf("return exchange repo not configured")
 	}
-	return s.returnExchangeStore.List()
+	return s.returnExchangeRepo.List(s.tenantID)
 }
 
 func (s *SyncService) CreateReturnExchange(rec store.ReturnExchangeRecord) (store.ReturnExchangeRecord, error) {
-	if s.returnExchangeStore == nil {
-		return store.ReturnExchangeRecord{}, fmt.Errorf("return exchange store not configured")
+	if s.returnExchangeRepo == nil {
+		return store.ReturnExchangeRecord{}, fmt.Errorf("return exchange repo not configured")
 	}
-	return s.returnExchangeStore.Create(rec)
+	return s.returnExchangeRepo.Create(s.tenantID, rec)
 }
 
 func (s *SyncService) UpdateReturnExchange(id string, rec store.ReturnExchangeRecord) (store.ReturnExchangeRecord, error) {
-	if s.returnExchangeStore == nil {
-		return store.ReturnExchangeRecord{}, fmt.Errorf("return exchange store not configured")
+	if s.returnExchangeRepo == nil {
+		return store.ReturnExchangeRecord{}, fmt.Errorf("return exchange repo not configured")
 	}
-	return s.returnExchangeStore.Update(id, rec)
+	return s.returnExchangeRepo.Update(s.tenantID, id, rec)
 }
 
 func (s *SyncService) DeleteReturnExchange(id string) error {
-	if s.returnExchangeStore == nil {
-		return fmt.Errorf("return exchange store not configured")
+	if s.returnExchangeRepo == nil {
+		return fmt.Errorf("return exchange repo not configured")
 	}
-	return s.returnExchangeStore.Delete(id)
+	return s.returnExchangeRepo.Delete(s.tenantID, id)
 }

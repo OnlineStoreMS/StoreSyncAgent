@@ -14,9 +14,15 @@ import (
 )
 
 func main() {
-	configPath := flag.String("config", "configs/config.example.yaml", "config file path")
+	configPath := flag.String("config", "configs/config.yaml", "config file path")
+	mobile := flag.String("mobile", "", "KDZS mobile (required)")
+	password := flag.String("password", "", "KDZS password (required)")
 	activeOnly := flag.Bool("active-only", true, "only show active bound shops")
 	flag.Parse()
+
+	if *mobile == "" || *password == "" {
+		log.Fatal("usage: kdzs-test -mobile MOBILE -password PASSWORD [-config configs/config.yaml]")
+	}
 
 	absConfig, err := filepath.Abs(*configPath)
 	if err != nil {
@@ -26,22 +32,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := cfg.Kdzs.Validate(); err != nil {
-		log.Fatal(err)
-	}
-
-	acc, err := cfg.Kdzs.ActiveAccount()
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	ctx := context.Background()
 	client := kdzs.NewClient(cfg.Kdzs.BaseURL)
 
 	fmt.Println("=== 快递助手登录测试 ===")
-	fmt.Printf("账号: %s (%s)\n", acc.Mobile, acc.Name)
+	fmt.Printf("账号: %s\n", *mobile)
 
-	loginData, err := client.LoginWithPassword(ctx, acc.Mobile, acc.Password)
+	loginData, err := client.LoginWithPassword(ctx, *mobile, *password)
 	if err != nil {
 		log.Fatalf("login failed: %v", err)
 	}

@@ -14,8 +14,14 @@ import (
 
 func main() {
 	configPath := flag.String("config", "configs/config.yaml", "config file path")
+	mobile := flag.String("mobile", "", "KDZS mobile (required)")
+	password := flag.String("password", "", "KDZS password (required)")
 	platform := flag.String("platform", "FXG", "platform code")
 	flag.Parse()
+
+	if *mobile == "" || *password == "" {
+		log.Fatal("usage: kdzs-debug -mobile MOBILE -password PASSWORD [-config configs/config.yaml]")
+	}
 
 	absConfig, err := filepath.Abs(*configPath)
 	if err != nil {
@@ -29,7 +35,7 @@ func main() {
 	ctx := context.Background()
 	client := kdzs.NewClient(cfg.Kdzs.BaseURL)
 	session := kdzs.NewSession(client)
-	if err := session.EnsureLogin(ctx, cfg.Kdzs.Mobile, cfg.Kdzs.Password); err != nil {
+	if err := session.EnsureLogin(ctx, *mobile, *password); err != nil {
 		log.Fatal(err)
 	}
 

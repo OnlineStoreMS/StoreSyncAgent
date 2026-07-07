@@ -18,21 +18,17 @@ StoreSyncAgent 是 **OSMS** 平台下的电商店铺同步应用，与 StoreCore
 | API | 8097 |
 | Web | 5178 |
 
-## 本地开发
+## 配置与部署
+
+业务数据（KDZS 账号、退换货、通知配置）均存 **PostgreSQL**，通过 UserCore 应用中心 SSO 登录。
+
+平台统一部署见 **`deploy` 仓库**：
 
 ```bash
-cp configs/config.example.yaml configs/config.yaml
-# 编辑 configs/config.yaml（数据库、auth 等）
-
-make run
-
-# 前端
-cd web && npm install && npm run dev
+make sync-configs && make up-images
 ```
 
-本地一体化调试 API 静态资源：`go run ./cmd/api -config configs/config.yaml -web-dist web/dist`
-
-登录：从 UserCore 应用中心（`:5174`）进入「电商店铺同步」；本地可将 `auth.enabled` 设为 `false` 跳过 SSO。
+`configs/config.yaml` 与 `deploy/configs/storesyncagent.yaml` 结构一致；KDZS 账号在 Web「账号管理」维护，不在配置文件中填写。
 
 ## 数据库
 
@@ -41,13 +37,9 @@ make init-db APP_PASSWORD=你的密码
 make fix-db-perms
 ```
 
-平台统一部署使用 `deploy` 仓库中的 PostgreSQL 配置；本地开发默认 SQLite（见 `configs/config.example.yaml`）。
-
 ## Docker / ACR
 
 镜像名：`storesyncagent-api`、`storesyncagent-web`，CI 推送到阿里云 ACR（见 `.github/workflows/docker-push-acr.yml`）。
-
-**平台编排见 `/home/asialeaf/projects/deploy`**：`make sync-configs && make up-images`
 
 ## 仓库
 

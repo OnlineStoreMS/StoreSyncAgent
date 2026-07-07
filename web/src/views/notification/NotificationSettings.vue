@@ -180,7 +180,7 @@ onMounted(load)
         :closable="false"
         show-icon
         class="hint"
-        title="通过飞书群机器人 Webhook 推送售后提醒。配置与去重状态保存在 data/notifications.json，无需数据库；服务会按设定间隔定时拉取售后并推送。"
+        title="通过飞书群机器人 Webhook 推送售后提醒。配置与去重状态保存在 PostgreSQL（按租户隔离）；服务会按设定间隔定时拉取售后并推送。"
       />
 
       <el-form label-width="120px" class="form">

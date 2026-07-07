@@ -86,7 +86,7 @@ func (s *SyncService) buildNotificationView(data store.NotificationData) *Notifi
 }
 
 func (s *SyncService) GetNotificationView() (*NotificationView, error) {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func (s *SyncService) GetNotificationView() (*NotificationView, error) {
 }
 
 func (s *SyncService) ResetNotificationState() (*NotificationView, int, error) {
-	cleared, err := s.notificationStore.ResetState()
+	cleared, err := s.notificationRepo.ResetState(s.tenantID)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -159,7 +159,7 @@ func (s *SyncService) SaveNotificationConfig(in store.NotificationConfig) (*Noti
 	if _, err := s.resolveNotificationAccountIDs(in); err != nil && len(in.AccountIDs) > 0 {
 		return nil, err
 	}
-	data, err := s.notificationStore.SaveConfig(in)
+	data, err := s.notificationRepo.SaveConfig(s.tenantID, in)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +167,7 @@ func (s *SyncService) SaveNotificationConfig(in store.NotificationConfig) (*Noti
 }
 
 func (s *SyncService) TestNotification(ctx context.Context, text string) error {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil {
 		return err
 	}
@@ -187,7 +187,7 @@ func (s *SyncService) TestNotification(ctx context.Context, text string) error {
 }
 
 func (s *SyncService) TestBarcodeNotification(ctx context.Context) error {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil {
 		return err
 	}
@@ -214,7 +214,7 @@ func (s *SyncService) TestBarcodeNotification(ctx context.Context) error {
 }
 
 func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRunResult, error) {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 	runAt := now.Format("2006-01-02 15:04:05")
 
 	updateState := func(ok bool, sent int, errMsg, barcodeErr string) {
-		_ = s.notificationStore.UpdateState(func(st *store.NotificationState) error {
+		_ = s.notificationRepo.UpdateState(s.tenantID, func(st *store.NotificationState) error {
 			st.LastRunAt = runAt
 			st.LastRunOK = ok
 			st.LastError = errMsg
@@ -307,7 +307,7 @@ func (s *SyncService) RunNotificationPoll(ctx context.Context) (*NotificationRun
 				sent++
 				notifyAt := time.Now().Format(time.RFC3339)
 				notified[key] = notifyAt
-				if err := s.notificationStore.UpdateState(func(st *store.NotificationState) error {
+				if err := s.notificationRepo.UpdateState(s.tenantID, func(st *store.NotificationState) error {
 					if st.Notified == nil {
 						st.Notified = map[string]string{}
 					}
@@ -519,7 +519,7 @@ func truncateText(s string, max int) string {
 }
 
 func (s *SyncService) NotificationPollInterval() time.Duration {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil || !data.Config.Enabled {
 		return 15 * time.Minute
 	}
@@ -531,7 +531,7 @@ func (s *SyncService) NotificationPollInterval() time.Duration {
 }
 
 func (s *SyncService) NotificationEnabled() bool {
-	data, err := s.notificationStore.Load()
+	data, err := s.notificationRepo.Load(s.tenantID)
 	if err != nil {
 		return false
 	}

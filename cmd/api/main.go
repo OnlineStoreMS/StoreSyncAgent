@@ -42,13 +42,12 @@ func main() {
 	if err := database.AutoMigrate(db); err != nil {
 		log.Fatal(err)
 	}
-	if cfg.Database.SeedFromConfig {
-		database.SeedLegacyAccounts(db, cfg)
-	}
 	log.Printf("database connected: driver=%s", cfg.Database.Driver)
 
 	kdzsRepo := repo.NewKdzs(db)
-	mgr := service.NewManager(cfg, kdzsRepo)
+	returnExchangeRepo := repo.NewReturnExchange(db)
+	notificationRepo := repo.NewNotification(db)
+	mgr := service.NewManager(cfg, kdzsRepo, returnExchangeRepo, notificationRepo)
 	h := handler.New(mgr)
 	notifyScheduler := scheduler.NewNotificationScheduler(mgr)
 	notifyScheduler.Start()

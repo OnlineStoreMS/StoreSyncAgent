@@ -3,9 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -14,17 +11,26 @@ import (
 )
 
 type Manager struct {
-	baseCfg  *config.Config
-	kdzsRepo *repo.KdzsRepo
-	mu       sync.Mutex
-	services map[uint64]*SyncService
+	baseCfg            *config.Config
+	kdzsRepo           *repo.KdzsRepo
+	returnExchangeRepo *repo.ReturnExchangeRepo
+	notificationRepo   *repo.NotificationRepo
+	mu                 sync.Mutex
+	services           map[uint64]*SyncService
 }
 
-func NewManager(baseCfg *config.Config, kdzsRepo *repo.KdzsRepo) *Manager {
+func NewManager(
+	baseCfg *config.Config,
+	kdzsRepo *repo.KdzsRepo,
+	returnExchangeRepo *repo.ReturnExchangeRepo,
+	notificationRepo *repo.NotificationRepo,
+) *Manager {
 	return &Manager{
-		baseCfg:  baseCfg,
-		kdzsRepo: kdzsRepo,
-		services: make(map[uint64]*SyncService),
+		baseCfg:            baseCfg,
+		kdzsRepo:           kdzsRepo,
+		returnExchangeRepo: returnExchangeRepo,
+		notificationRepo:   notificationRepo,
+		services:           make(map[uint64]*SyncService),
 	}
 }
 
@@ -47,7 +53,7 @@ func (m *Manager) ForTenant(tenantID uint64) (*SyncService, error) {
 	if svc, ok := m.services[tenantID]; ok {
 		return svc, nil
 	}
-	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo)
+	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo, m.returnExchangeRepo, m.notificationRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -67,33 +73,16 @@ func (m *Manager) ListTenantIDs() []uint64 {
 		seen[id] = struct{}{}
 	}
 
-	if ids, err := m.kdzsRepo.ListTenantIDs(); err == nil {
-		for _, id := range ids {
-			add(id)
-		}
-	}
-
-	base := m.baseCfg.Storage.DataDir
-	if base == "" {
-		base = "data"
-	}
-	tenantRoot := filepath.Join(base, "tenants")
-	entries, err := os.ReadDir(tenantRoot)
-	if err == nil {
-		for _, ent := range entries {
-			if !ent.IsDir() {
-				continue
+	for _, source := range []func() ([]uint64, error){
+		m.kdzsRepo.ListTenantIDs,
+		m.returnExchangeRepo.ListTenantIDs,
+		m.notificationRepo.ListTenantIDs,
+	} {
+		if ids, err := source(); err == nil {
+			for _, id := range ids {
+				add(id)
 			}
-			id, err := strconv.ParseUint(ent.Name(), 10, 64)
-			if err != nil {
-				continue
-			}
-			add(id)
 		}
-	}
-
-	if len(seen) == 0 {
-		add(1)
 	}
 
 	ids := make([]uint64, 0, len(seen))

@@ -3,8 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,7 +13,6 @@ import (
 	"storesyncagent/internal/kdzs"
 	"storesyncagent/internal/model"
 	"storesyncagent/internal/repo"
-	"storesyncagent/internal/store"
 )
 
 type SyncService struct {
@@ -28,30 +25,33 @@ type SyncService struct {
 	session             *kdzs.Session
 	mu                  sync.Mutex
 	activeAccountID     string
-	returnExchangeStore *store.ReturnExchangeStore
-	notificationStore   *store.NotificationStore
+	returnExchangeRepo  *repo.ReturnExchangeRepo
+	notificationRepo    *repo.NotificationRepo
 	feishuClient        *feishu.Client
 }
 
-func NewSyncService(baseCfg *config.Config, tenantID uint64, kdzsRepo *repo.KdzsRepo) (*SyncService, error) {
-	dataDir := baseCfg.TenantDataDir(tenantID)
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return nil, fmt.Errorf("data dir: %w", err)
-	}
+func NewSyncService(
+	baseCfg *config.Config,
+	tenantID uint64,
+	kdzsRepo *repo.KdzsRepo,
+	returnExchangeRepo *repo.ReturnExchangeRepo,
+	notificationRepo *repo.NotificationRepo,
+) (*SyncService, error) {
 	globalBaseURL := baseCfg.Kdzs.BaseURL
 	if globalBaseURL == "" {
 		globalBaseURL = "https://df.kdzs.com"
 	}
 	tenantCfg := &config.Config{
-		Server:  baseCfg.Server,
-		Storage: config.StorageConfig{DataDir: dataDir},
+		Server: baseCfg.Server,
 	}
 	svc := &SyncService{
-		cfg:             tenantCfg,
-		tenantID:        tenantID,
-		globalBaseURL:   globalBaseURL,
-		kdzsRepo:        kdzsRepo,
-		feishuClient:    feishu.NewClient(),
+		cfg:                tenantCfg,
+		tenantID:           tenantID,
+		globalBaseURL:      globalBaseURL,
+		kdzsRepo:           kdzsRepo,
+		returnExchangeRepo: returnExchangeRepo,
+		notificationRepo:   notificationRepo,
+		feishuClient:       feishu.NewClient(),
 	}
 	if err := svc.loadSettings(); err != nil {
 		return nil, fmt.Errorf("kdzs settings: %w", err)
@@ -59,22 +59,8 @@ func NewSyncService(baseCfg *config.Config, tenantID uint64, kdzsRepo *repo.Kdzs
 	svc.client = kdzs.NewClient(svc.kdzsBaseURL())
 	svc.session = kdzs.NewSession(svc.client)
 	if err := svc.ensureDefaultActiveAccount(); err != nil {
-		// allow tenant without accounts until first login attempt
 		svc.activeAccountID = ""
 	}
-	storePath := filepath.Join(dataDir, "return-exchanges.json")
-	seedPath := filepath.Join(dataDir, "return-exchanges.seed.json")
-	rexStore, err := store.NewReturnExchangeStore(storePath, seedPath)
-	if err != nil {
-		return nil, fmt.Errorf("return exchange store: %w", err)
-	}
-	notifyPath := filepath.Join(dataDir, "notifications.json")
-	notifyStore, err := store.NewNotificationStore(notifyPath)
-	if err != nil {
-		return nil, fmt.Errorf("notification store: %w", err)
-	}
-	svc.returnExchangeStore = rexStore
-	svc.notificationStore = notifyStore
 	return svc, nil
 }
 

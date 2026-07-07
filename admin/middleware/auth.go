@@ -13,13 +13,12 @@ import (
 )
 
 func AdminAuth(cfg *config.AuthConfig, jwt *jwtmgr.Manager) gin.HandlerFunc {
-	if !cfg.Enabled {
-		return func(c *gin.Context) {
-			c.Set(authcontext.ContextTenant, uint64(1))
-			c.Next()
-		}
-	}
 	return func(c *gin.Context) {
+		if !cfg.Enabled {
+			response.Fail(c, http.StatusUnauthorized, "认证未启用")
+			c.Abort()
+			return
+		}
 		auth := c.GetHeader("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
 			response.Fail(c, http.StatusUnauthorized, "请先登录")
