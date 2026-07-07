@@ -19,6 +19,7 @@ type TradeQuery struct {
 	StartDateTime string
 	EndDateTime   string
 	Tid           string
+	Sid           string
 }
 
 type TradeListResult struct {
@@ -55,6 +56,7 @@ type TradeListItem struct {
 	FactoryName     string         `json:"factoryName,omitempty"`
 	Decrypted       bool           `json:"decrypted,omitempty"`
 	FormattedReceiver string       `json:"formattedReceiver,omitempty"`
+	Waybills          []string       `json:"waybills,omitempty"`
 	DecryptMeta     *TradeDecryptMeta `json:"-"`
 }
 
@@ -80,6 +82,7 @@ type tradeListRequest struct {
 	FactoryIDs      []string `json:"factoryIds,omitempty"`
 	DistributorIDs  []string `json:"distributorIds,omitempty"`
 	Tids            []string `json:"tids,omitempty"`
+	SidList         []string `json:"sidList,omitempty"`
 	StartDateTime   string   `json:"startDateTime,omitempty"`
 	EndDateTime     string   `json:"endDateTime,omitempty"`
 	TimeType        int      `json:"timeType,omitempty"`
@@ -145,7 +148,7 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 	if q.PageSize <= 0 {
 		q.PageSize = 20
 	}
-	idSearch := strings.TrimSpace(q.Tid) != ""
+	idSearch := strings.TrimSpace(q.Tid) != "" || strings.TrimSpace(q.Sid) != ""
 	if q.TradeStatus == "" && !idSearch {
 		q.TradeStatus = DefaultTradeStatus()
 	}
@@ -228,7 +231,7 @@ func (s *Session) QueryTradesRaw(ctx context.Context, q TradeQuery) (map[string]
 func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (tradeListRequest, error) {
 	userID, _ := strconv.ParseInt(s.UserID(), 10, 64)
 	start, end := ResolveDateRange(q.StartDateTime, q.EndDateTime)
-	if strings.TrimSpace(q.Tid) != "" {
+	if strings.TrimSpace(q.Tid) != "" || strings.TrimSpace(q.Sid) != "" {
 		start, end = ResolveTradeSearchDateRange(q.StartDateTime, q.EndDateTime)
 	}
 	timeType := q.TimeType
@@ -248,6 +251,9 @@ func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (trad
 	}
 	if tid := strings.TrimSpace(q.Tid); tid != "" {
 		body.Tids = []string{tid}
+	}
+	if sid := strings.TrimSpace(q.Sid); sid != "" {
+		body.SidList = []string{sid}
 	}
 	if q.ShopID != "" {
 		body.ShopIDs = []string{q.ShopID}
@@ -360,6 +366,7 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 		if item.StatusText == "" {
 			item.StatusText = TradeStatusLabel(asString(pkg["platformOrderStatus"], pkg["tradeStatus"], item.TradeStatus))
 		}
+		collectWaybills(item, pkg)
 		return item
 	}
 
@@ -376,6 +383,7 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 	if item.StatusText == "" && item.TradeStatus != "" {
 		item.StatusText = TradeStatusLabel(item.TradeStatus)
 	}
+	collectWaybills(item, pkg)
 	return item
 }
 
@@ -412,8 +420,41 @@ func parseTradeItemLegacyTrades(item *TradeListItem, trades []any) *TradeListIte
 				})
 			}
 		}
+		collectWaybills(item, trade)
 	}
 	return item
+}
+
+func collectWaybills(item *TradeListItem, sources ...map[string]any) {
+	if item == nil {
+		return
+	}
+	for _, m := range sources {
+		appendWaybillsFromMap(&item.Waybills, m)
+	}
+}
+
+func appendWaybillsFromMap(dst *[]string, m map[string]any) {
+	if m == nil {
+		return
+	}
+	for _, key := range []string{"sid", "mailNo", "outSid", "waybillNo", "expressNo", "logisticsNo", "ydNo"} {
+		if v := asString(m[key]); v != "" {
+			*dst = appendUnique(*dst, v)
+		}
+	}
+	if pkgs, ok := m["packages"].([]any); ok {
+		for _, p := range pkgs {
+			pm, _ := p.(map[string]any)
+			appendWaybillsFromMap(dst, pm)
+		}
+	}
+	if traces, ok := m["logisticsList"].([]any); ok {
+		for _, t := range traces {
+			tm, _ := t.(map[string]any)
+			appendWaybillsFromMap(dst, tm)
+		}
+	}
 }
 
 func flattenTradeMap(item *TradeListItem, trade map[string]any) {

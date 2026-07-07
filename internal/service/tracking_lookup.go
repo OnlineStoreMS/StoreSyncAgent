@@ -29,7 +29,7 @@ func refundGoodsToTradeGoods(goods []kdzs.RefundGoods) []kdzs.TradeGoods {
 	return out
 }
 
-func (s *SyncService) LookupOrderByTrackingNo(ctx context.Context, trackingNo string) (*OrderLookupView, error) {
+func (s *SyncService) LookupOrderByTrackingNo(ctx context.Context, trackingNo, recordType string) (*OrderLookupView, error) {
 	if err := s.ensureLogin(ctx); err != nil {
 		return nil, err
 	}
@@ -37,7 +37,15 @@ func (s *SyncService) LookupOrderByTrackingNo(ctx context.Context, trackingNo st
 	if trackingNo == "" {
 		return nil, fmt.Errorf("trackingNo is required")
 	}
+	switch strings.ToLower(strings.TrimSpace(recordType)) {
+	case "packing":
+		return s.lookupPackingByTrackingNo(ctx, trackingNo)
+	default:
+		return s.lookupUnboxingByTrackingNo(ctx, trackingNo)
+	}
+}
 
+func (s *SyncService) lookupUnboxingByTrackingNo(ctx context.Context, trackingNo string) (*OrderLookupView, error) {
 	view := &OrderLookupView{Found: false, OrderNo: trackingNo}
 	platforms := []string{kdzs.PlatformDouyin, kdzs.PlatformTaobao, kdzs.PlatformXHS}
 
@@ -85,20 +93,27 @@ func (s *SyncService) LookupOrderByTrackingNo(ctx context.Context, trackingNo st
 		}
 	}
 
+	return view, nil
+}
+
+func (s *SyncService) lookupPackingByTrackingNo(ctx context.Context, trackingNo string) (*OrderLookupView, error) {
+	view := &OrderLookupView{Found: false, OrderNo: trackingNo}
+	platforms := []string{kdzs.PlatformDouyin, kdzs.PlatformTaobao, kdzs.PlatformXHS}
+
 	for _, platform := range platforms {
-		item, tradeStatus, err := s.session.LookupTradeByTid(ctx, platform, trackingNo)
+		item, err := s.session.LookupTradeBySid(ctx, platform, trackingNo, "shipped")
 		if err != nil || item == nil {
 			continue
 		}
-		s.enrichOrderLookupFromTradeFull(ctx, view, item, platform, tradeStatus)
-		view.Source = "trade"
+		s.enrichOrderLookupFromTradeFull(ctx, view, item, platform, "shipped")
+		view.Source = "shipped"
 		return view, nil
 	}
 
 	return view, nil
 }
 
-func (s *SyncService) LookupOrdersByTrackingNos(ctx context.Context, trackingNos []string) (map[string]*OrderLookupView, error) {
+func (s *SyncService) LookupOrdersByTrackingNos(ctx context.Context, trackingNos []string, recordType string) (map[string]*OrderLookupView, error) {
 	out := make(map[string]*OrderLookupView, len(trackingNos))
 	seen := make(map[string]struct{}, len(trackingNos))
 	for _, raw := range trackingNos {
@@ -110,7 +125,7 @@ func (s *SyncService) LookupOrdersByTrackingNos(ctx context.Context, trackingNos
 			continue
 		}
 		seen[key] = struct{}{}
-		view, err := s.LookupOrderByTrackingNo(ctx, key)
+		view, err := s.LookupOrderByTrackingNo(ctx, key, recordType)
 		if err != nil {
 			return nil, err
 		}
