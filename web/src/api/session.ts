@@ -1,4 +1,4 @@
-import { clearToken, getToken, type SessionInfo } from '../utils/auth'
+import { clearToken, getToken, resetSessionVerification, saveToken, type SessionInfo } from '../utils/auth'
 
 const IAM_API =
   import.meta.env.VITE_IAM_API_URL
@@ -50,4 +50,30 @@ export function clearSessionCache() {
 export function clearSession() {
   clearToken()
   clearSessionCache()
+}
+
+export async function switchTenant(tenantId: number): Promise<SessionInfo> {
+  const token = getToken()
+  if (!token) throw new Error('未登录')
+  const res = await fetch(`${IAM_API}/auth/switch-tenant`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tenantId }),
+  })
+  const body = await res.json()
+  if (body.code !== 200 || !body.data?.accessToken) {
+    throw new Error(body.message || '切换租户失败')
+  }
+  saveToken(body.data.accessToken)
+  resetSessionVerification()
+  const info: SessionInfo = {
+    user: body.data.user,
+    tenant: body.data.tenant,
+    tenants: body.data.tenants?.length ? body.data.tenants : [body.data.tenant],
+  }
+  saveSessionCache(info)
+  return info
 }

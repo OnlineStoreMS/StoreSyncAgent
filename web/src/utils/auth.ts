@@ -42,6 +42,10 @@ export function trustFreshToken() {
   sessionVerified = true
 }
 
+export function resetSessionVerification() {
+  sessionVerified = false
+}
+
 export function redirectToPortal() {
   window.location.href = `${getPortalUrl()}/login`
 }

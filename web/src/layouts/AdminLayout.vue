@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDown, Expand, Fold, Refresh } from '@element-plus/icons-vue'
 import Sidebar from './Sidebar.vue'
+import TenantSwitcher from '../components/TenantSwitcher.vue'
 import { portalAppsUrl, portalLoginUrl } from '../utils/auth'
 import { useSessionStore } from '../stores/session'
 import { useKdzsStore } from '../stores/kdzs'
@@ -36,7 +37,7 @@ const activeAccountLabel = computed(() => {
 })
 
 onMounted(async () => {
-  void sessionStore.load()
+  void sessionStore.load(true)
   await kdzsStore.loadStatus()
   await kdzsStore.loadAccounts()
 })
@@ -73,6 +74,7 @@ function logout() {
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <TenantSwitcher />
           <el-dropdown trigger="click" @command="onSwitchAccount">
             <div class="account-trigger">
               <el-tag v-if="kdzsStore.loginInfo.loggedIn" type="success" effect="plain">

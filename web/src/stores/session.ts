@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
-  clearSession, fetchSession, loadSessionCache, type SessionInfo,
+  clearSession, fetchSession, loadSessionCache, switchTenant, type SessionInfo,
 } from '../api/session'
 
 export const useSessionStore = defineStore('session', () => {
@@ -24,5 +24,12 @@ export const useSessionStore = defineStore('session', () => {
     session.value = null
   }
 
-  return { session, displayLabel, load, clear }
+  async function switchToTenant(tenantId: number) {
+    const info = await switchTenant(tenantId)
+    session.value = info
+    window.location.reload()
+    return info
+  }
+
+  return { session, displayLabel, load, clear, switchToTenant }
 })
