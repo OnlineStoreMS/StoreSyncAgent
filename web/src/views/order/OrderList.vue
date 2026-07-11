@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { ElMessage } from 'element-plus'
-import { decryptOrders, listOrders, setOrderAgentType, type Order, type OrderFilters, type OrderListResponse } from '../../api'
+import { decryptOrders, listOrders, setOrderAgentType, type Order, type OrderFilters, type OrderListResponse, type TradeGoods } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
 import { copyToClipboard } from '../../utils/clipboard'
-import { dateShortcuts, defaultDateRange } from '../../utils/date'
+import { dateShortcuts, defaultDateRange, formatOrderCopyDateTime } from '../../utils/date'
 
 const kdzsStore = useKdzsStore()
+const route = useRoute()
 
 const loading = reactive({ orders: false, decrypt: false, agent: false, decryptRow: {} as Record<string, boolean> })
 const orders = ref<Order[]>([])
@@ -155,6 +157,34 @@ async function copyText(text: string) {
   } else {
     ElMessage.error('复制失败')
   }
+}
+
+function formatOrderGoodsLines(goods?: TradeGoods[]): string {
+  return (goods || [])
+    .map((g) => {
+      const spec = g.skuName?.trim() || g.title?.trim() || g.outerId?.trim() || ''
+      if (!spec) return ''
+      const num = g.num && g.num > 0 ? g.num : 1
+      return `${spec} x${num}`
+    })
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildOrderCopyText(order: Order): string {
+  const address = order.formattedReceiver?.trim() || ''
+  const goodsBlock = formatOrderGoodsLines(order.goods)
+  const lines = [formatOrderCopyDateTime(new Date()), '', address, '---']
+  if (goodsBlock) lines.push(goodsBlock)
+  return lines.join('\n')
+}
+
+async function copyOrderText(order: Order) {
+  if (!order.formattedReceiver?.trim()) {
+    ElMessage.warning('暂无收件信息')
+    return
+  }
+  await copyText(buildOrderCopyText(order))
 }
 
 async function decryptOne(order: Order) {
@@ -328,6 +358,10 @@ async function refreshForAccountSwitch() {
 useAccountRefresh(refreshForAccountSwitch)
 
 onMounted(async () => {
+  const tradeStatus = route.query.tradeStatus
+  if (typeof tradeStatus === 'string' && statusOptions.some((o) => o.value === tradeStatus)) {
+    filters.tradeStatus = tradeStatus
+  }
   if (!kdzsStore.shops.length) {
     await kdzsStore.loadShops()
   }
@@ -479,7 +513,7 @@ onMounted(async () => {
             <template v-if="row.decrypted && row.formattedReceiver">
               <div class="decrypted-line">{{ row.formattedReceiver }}</div>
               <div class="receiver-actions">
-                <el-button link type="primary" size="small" @click="copyText(row.formattedReceiver)">复制</el-button>
+                <el-button link type="primary" size="small" @click="copyOrderText(row)">复制</el-button>
               </div>
             </template>
             <template v-else>
@@ -526,7 +560,7 @@ onMounted(async () => {
               link
               type="primary"
               size="small"
-              @click="copyText(row.formattedReceiver)"
+              @click="copyOrderText(row)"
             >
               复制
             </el-button>

@@ -111,6 +111,18 @@ function goRefundScenario(scenario: string) {
   router.push({ path: '/refunds', query: scenario ? { scenario } : undefined })
 }
 
+function goKdzsAccounts() {
+  router.push('/kdzs-accounts')
+}
+
+function goShops() {
+  router.push('/shops')
+}
+
+function goOrders(tradeStatus: string) {
+  router.push({ path: '/orders', query: { tradeStatus } })
+}
+
 async function onSwitchAccount(accountId: string) {
   await kdzsStore.switchKdzsAccount(accountId)
 }
@@ -166,7 +178,7 @@ onMounted(async () => {
 
     <el-row :gutter="16" class="summary-row">
       <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="hover" class="stat-card" v-loading="kdzsStore.loading.status">
+        <el-card shadow="hover" class="stat-card stat-card-clickable" v-loading="kdzsStore.loading.status" @click="goKdzsAccounts">
           <div class="stat-inner">
             <el-icon :size="28" color="#409eff"><Connection /></el-icon>
             <div>
@@ -178,7 +190,7 @@ onMounted(async () => {
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="hover" class="stat-card" v-loading="kdzsStore.loading.shops">
+        <el-card shadow="hover" class="stat-card stat-card-clickable" v-loading="kdzsStore.loading.shops" @click="goShops">
           <div class="stat-inner">
             <el-icon :size="28" color="#67c23a"><Shop /></el-icon>
             <div>
@@ -190,7 +202,7 @@ onMounted(async () => {
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="hover" class="stat-card" v-loading="kdzsStore.loading.overview">
+        <el-card shadow="hover" class="stat-card stat-card-clickable" v-loading="kdzsStore.loading.overview" @click="goOrders('wait_audit')">
           <div class="stat-inner">
             <el-icon :size="28" color="#e6a23c"><List /></el-icon>
             <div>
@@ -204,7 +216,7 @@ onMounted(async () => {
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="12" :lg="6">
-        <el-card shadow="hover" class="stat-card" v-loading="kdzsStore.loading.overview">
+        <el-card shadow="hover" class="stat-card stat-card-clickable" v-loading="kdzsStore.loading.overview" @click="goOrders('wait_send')">
           <div class="stat-inner">
             <el-icon :size="28" color="#f56c6c"><List /></el-icon>
             <div>
@@ -434,6 +446,13 @@ onMounted(async () => {
 .nav-card,
 .info-card {
   margin-bottom: 16px;
+}
+.stat-card-clickable {
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+.stat-card-clickable:hover {
+  transform: translateY(-2px);
 }
 .stat-inner,
 .nav-inner {
