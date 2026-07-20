@@ -290,7 +290,7 @@ func applyListStatusText(items []TradeListItem, listTradeStatus string) {
 // finalizeTradeListItems 分离「快递助手列表态」与「电商平台订单状态」，避免互相覆盖。
 func finalizeTradeListItems(items []TradeListItem, listTradeStatus string) {
 	for i := range items {
-		normalizeAgentType(&items[i])
+		normalizeAgentType(&items[i], 0, 0)
 		preservePlatformOrderStatus(&items[i])
 		if items[i].AfterSaleStatus != "" && items[i].AfterSaleStatusText == "" {
 			items[i].AfterSaleStatusText = AfterSaleStatusLabel(items[i].AfterSaleStatus)
@@ -370,7 +370,7 @@ func (s *Session) enrichTradeItems(ctx context.Context, platform, tradeStatus st
 		if item == nil {
 			continue
 		}
-		normalizeAgentType(item)
+		normalizeAgentType(item, 0, 0)
 		for _, sid := range item.SysTids {
 			bySysTid[sid] = *item
 		}
@@ -410,7 +410,7 @@ func mergeTradeListItem(base, detail TradeListItem) TradeListItem {
 	if out.ShopName == "" {
 		out.ShopName = base.ShopName
 	}
-	normalizeAgentType(&out)
+	normalizeAgentType(&out, 0, 0)
 	return out
 }
 
@@ -592,32 +592,62 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 	if item.PrinterMemo == "" {
 		item.PrinterMemo = asString(trade["printerMemo"], trade["dadanMemo"])
 	}
-	if item.FactoryID == "" {
-		item.FactoryID = asString(trade["factoryId"], trade["factoryUserId"], trade["factoryUserID"], trade["pushFactoryId"])
-	}
 	if item.FactoryName == "" {
-		item.FactoryName = asString(trade["factoryName"], trade["factoryNick"], trade["factoryUserName"], trade["pushFactoryName"])
+		item.FactoryName = asString(trade["factoryName"], trade["factoryNick"], trade["pushFactoryName"])
 	}
-	if at := asInt(trade["agentType"], trade["tradeAgentType"], trade["daifaType"]); at != 0 {
+	// 厂家备注不等于厂家名，仅在名称缺失时兜底
+	if item.FactoryName == "" {
+		if remark := strings.TrimSpace(asString(trade["factoryRemark"])); remark != "" {
+			item.FactoryName = remark
+		}
+	}
+	if at := asInt(trade["agentType"], trade["tradeAgentType"]); at != 0 {
 		item.AgentType = at
 	}
-	normalizeAgentType(item)
+	// daifaStatus: 1自营 2代发；pushType: 2 推厂家
+	daifa := asInt(trade["daifaStatus"], trade["daifaType"])
+	pushType := asInt(trade["pushType"])
+	explicitFactoryID := asString(trade["factoryId"], trade["pushFactoryId"])
+	userFactoryID := asString(trade["factoryUserId"], trade["factoryUserID"])
+	applyFactoryFields(item, explicitFactoryID, userFactoryID, daifa, pushType)
+	normalizeAgentType(item, daifa, pushType)
 }
 
-// normalizeAgentType 以快递助手真实代发信息为准：有厂家则视为推厂家代发。
-func normalizeAgentType(item *TradeListItem) {
+// applyFactoryFields 仅在明确代发时采用 factoryUserId；裸 factoryUserId 常为商家自身 ID，不可当作厂家。
+func applyFactoryFields(item *TradeListItem, explicitFactoryID, userFactoryID string, daifa, pushType int) {
 	if item == nil {
 		return
 	}
-	switch item.AgentType {
-	case AgentTypePushFactory:
+	isDropship := daifa == 2 || pushType == 2 || item.AgentType == AgentTypePushFactory ||
+		strings.TrimSpace(item.FactoryName) != ""
+	if item.FactoryID == "" && explicitFactoryID != "" {
+		item.FactoryID = explicitFactoryID
+	}
+	if item.FactoryID == "" && isDropship && userFactoryID != "" {
+		item.FactoryID = userFactoryID
+	}
+}
+
+// normalizeAgentType 以 daifaStatus/agentType/pushType 为准，禁止仅凭 factoryUserId 推断代发。
+func normalizeAgentType(item *TradeListItem, daifa, pushType int) {
+	if item == nil {
 		return
-	case AgentTypeSelfPrint:
-		// 明确自营时保留；若接口仍带厂家名，不强制改写
-		return
+	}
+	switch {
+	case item.AgentType == AgentTypePushFactory || daifa == 2 || pushType == 2:
+		item.AgentType = AgentTypePushFactory
+	case item.AgentType == AgentTypeSelfPrint || daifa == 1:
+		item.AgentType = AgentTypeSelfPrint
+		// 自营单清理误写入的厂家 ID（多为商家自身 factoryUserId）
+		if strings.TrimSpace(item.FactoryName) == "" {
+			item.FactoryID = ""
+		}
+	case strings.TrimSpace(item.FactoryName) != "" && strings.TrimSpace(item.FactoryID) != "":
+		// 名称+厂家 ID 同时存在才视为代发（兼容接口未返回 daifaStatus）
+		item.AgentType = AgentTypePushFactory
 	default:
-		if strings.TrimSpace(item.FactoryID) != "" || strings.TrimSpace(item.FactoryName) != "" {
-			item.AgentType = AgentTypePushFactory
+		if item.AgentType == 0 {
+			item.AgentType = AgentTypeSelfPrint
 		}
 	}
 }
