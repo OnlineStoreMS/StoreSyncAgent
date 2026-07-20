@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -133,7 +134,31 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 		return nil, err
 	}
 	if resp.Result != 0 && resp.Result != ResultSuccess && resp.Result != 100 {
-		return nil, fmt.Errorf("%s", firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed"))
+		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed")
+		if len(resp.FailMessage) > 0 {
+			for _, v := range resp.FailMessage {
+				if strings.TrimSpace(v) != "" {
+					msg = v
+					break
+				}
+			}
+		}
+		if len(resp.FailList) > 0 && len(resp.SuccessList) == 0 {
+			return nil, fmt.Errorf("%s", msg)
+		}
+		// 部分成功仍返回结果，由调用方看 FailList
+	}
+	if len(resp.FailList) > 0 && len(resp.SuccessList) == 0 {
+		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed")
+		if len(resp.FailMessage) > 0 {
+			for _, v := range resp.FailMessage {
+				if strings.TrimSpace(v) != "" {
+					msg = v
+					break
+				}
+			}
+		}
+		return nil, fmt.Errorf("%s", msg)
 	}
 	return &AgentTypeResult{
 		SuccessList: resp.SuccessList,
