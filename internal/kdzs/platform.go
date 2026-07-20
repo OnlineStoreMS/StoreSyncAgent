@@ -86,8 +86,16 @@ func PlatformOrderStatusLabel(code string) string {
 		return "交易关闭"
 	case "WAIT_BUYER_PAY", "UNPAID":
 		return "待付款"
-	case "REFUNDING", "REFUND":
+	case "REFUNDING", "REFUND", "IN_REFUND":
 		return "退款中"
+	case "REFUND_SUCCESS", "REFUNDED", "SUCCESS_REFUND":
+		return "退款成功"
+	case "REFUND_CLOSED", "REFUND_CLOSE":
+		return "退款关闭"
+	case "WAIT_SELLER_AGREE":
+		return "申请退款"
+	case "PARTIAL_REFUNDING":
+		return "部分退款中"
 	default:
 		if looksLikeChineseLabel(code) {
 			return code

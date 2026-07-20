@@ -166,6 +166,7 @@ type OrderQuery struct {
 	TimeType      int    `form:"timeType"`
 	StartDateTime string `form:"startDateTime"`
 	EndDateTime   string `form:"endDateTime"`
+	Tid           string `form:"tid"`
 }
 
 type OrderFiltersView struct {
@@ -202,7 +203,7 @@ func (s *SyncService) ListOrders(ctx context.Context, q OrderQuery) (*OrderListV
 	if err := s.ensureLogin(ctx); err != nil {
 		return nil, err
 	}
-	if q.TradeStatus == "" {
+	if q.TradeStatus == "" && strings.TrimSpace(q.Tid) == "" {
 		q.TradeStatus = kdzs.DefaultTradeStatus()
 	}
 
@@ -276,6 +277,7 @@ func (s *SyncService) toTradeQuery(q OrderQuery) kdzs.TradeQuery {
 		TimeType:      q.TimeType,
 		StartDateTime: q.StartDateTime,
 		EndDateTime:   q.EndDateTime,
+		Tid:           q.Tid,
 	}
 }
 

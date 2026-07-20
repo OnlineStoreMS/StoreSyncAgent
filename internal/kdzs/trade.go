@@ -39,8 +39,12 @@ type TradeListItem struct {
 	ReceiverMobile  string         `json:"receiverMobile,omitempty"`
 	ReceiverAddress string         `json:"receiverAddress,omitempty"`
 	Payment         float64        `json:"payment,omitempty"`
-	TradeStatus     string         `json:"tradeStatus,omitempty"`
-	StatusText      string         `json:"statusText,omitempty"`
+	TradeStatus     string         `json:"tradeStatus,omitempty"` // 快递助手列表态：wait_audit/wait_send
+	StatusText      string         `json:"statusText,omitempty"`  // 快递助手列表态文案
+	PlatformOrderStatus     string `json:"platformOrderStatus,omitempty"`     // 电商平台订单状态码
+	PlatformOrderStatusText string `json:"platformOrderStatusText,omitempty"` // 电商平台订单状态文案
+	AfterSaleStatus         string `json:"afterSaleStatus,omitempty"`
+	AfterSaleStatusText     string `json:"afterSaleStatusText,omitempty"`
 	CreateTime      string         `json:"createTime,omitempty"`
 	PayTime         string         `json:"payTime,omitempty"`
 	ShopName        string         `json:"shopName,omitempty"`
@@ -186,7 +190,7 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 		}
 	}
 
-	applyListStatusText(items, q.TradeStatus)
+	finalizeTradeListItems(items, q.TradeStatus)
 
 	return &TradeListResult{
 		Total:    resp.Total,
@@ -280,12 +284,78 @@ func (s *Session) platformShopIDs(ctx context.Context, platform string) ([]strin
 }
 
 func applyListStatusText(items []TradeListItem, listTradeStatus string) {
-	if listTradeStatus == "" || strings.EqualFold(listTradeStatus, "all") {
+	finalizeTradeListItems(items, listTradeStatus)
+}
+
+// finalizeTradeListItems 分离「快递助手列表态」与「电商平台订单状态」，避免互相覆盖。
+func finalizeTradeListItems(items []TradeListItem, listTradeStatus string) {
+	for i := range items {
+		normalizeAgentType(&items[i])
+		preservePlatformOrderStatus(&items[i])
+		if items[i].AfterSaleStatus != "" && items[i].AfterSaleStatusText == "" {
+			items[i].AfterSaleStatusText = AfterSaleStatusLabel(items[i].AfterSaleStatus)
+		}
+		listStatus := strings.TrimSpace(listTradeStatus)
+		if listStatus == "" || strings.EqualFold(listStatus, "all") {
+			// tid 回查等无列表筛选项：用文案/已有字段推断快递助手列表态
+			if inferred := InferKDZSListStatus(items[i].TradeStatus, items[i].StatusText); inferred != "" {
+				items[i].TradeStatus = inferred
+				items[i].StatusText = TradeStatusLabel(inferred)
+			}
+			continue
+		}
+		items[i].TradeStatus = listStatus
+		items[i].StatusText = TradeStatusLabel(listStatus)
+	}
+}
+
+func preservePlatformOrderStatus(item *TradeListItem) {
+	if item == nil {
 		return
 	}
-	label := TradeStatusLabel(listTradeStatus)
-	for i := range items {
-		items[i].StatusText = label
+	if item.PlatformOrderStatus == "" {
+		cand := item.TradeStatus
+		if cand != "" && !IsKDZSListStatus(cand) {
+			item.PlatformOrderStatus = cand
+		}
+	}
+	if item.PlatformOrderStatusText == "" {
+		// StatusText 在覆盖前可能已是平台中文描述
+		st := strings.TrimSpace(item.StatusText)
+		if st != "" && st != TradeStatusLabel("wait_audit") && st != TradeStatusLabel("wait_send") &&
+			st != TradeStatusLabel("shipped") && st != TradeStatusLabel("completed") {
+			item.PlatformOrderStatusText = ResolveOrderStatusText(st, item.PlatformOrderStatus)
+		} else {
+			item.PlatformOrderStatusText = ResolveOrderStatusText("", item.PlatformOrderStatus)
+		}
+	}
+}
+
+// InferKDZSListStatus 从文案或混入的电商状态推断快递助手列表态。
+func InferKDZSListStatus(tradeStatus, statusText string) string {
+	if IsKDZSListStatus(tradeStatus) {
+		return strings.ToLower(strings.TrimSpace(tradeStatus))
+	}
+	st := strings.TrimSpace(statusText)
+	switch st {
+	case "待推单":
+		return "wait_audit"
+	case "待发货":
+		return "wait_send"
+	case "已发货":
+		return "shipped"
+	case "交易完成", "已完成":
+		return "completed"
+	}
+	return ""
+}
+
+func IsKDZSListStatus(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "wait_audit", "wait_send", "shipped", "completed", "all":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -300,6 +370,7 @@ func (s *Session) enrichTradeItems(ctx context.Context, platform, tradeStatus st
 		if item == nil {
 			continue
 		}
+		normalizeAgentType(item)
 		for _, sid := range item.SysTids {
 			bySysTid[sid] = *item
 		}
@@ -307,12 +378,40 @@ func (s *Session) enrichTradeItems(ctx context.Context, platform, tradeStatus st
 	for i := range items {
 		for _, sid := range items[i].SysTids {
 			if detail, ok := bySysTid[sid]; ok {
-				items[i] = detail
+				items[i] = mergeTradeListItem(items[i], detail)
 				break
 			}
 		}
 	}
 	return items, nil
+}
+
+// mergeTradeListItem 用详情补全列表项，保留列表侧已有的代发/厂家信息。
+func mergeTradeListItem(base, detail TradeListItem) TradeListItem {
+	out := detail
+	if out.AgentType == 0 {
+		out.AgentType = base.AgentType
+	}
+	if out.FactoryID == "" {
+		out.FactoryID = base.FactoryID
+	}
+	if out.FactoryName == "" {
+		out.FactoryName = base.FactoryName
+	}
+	if len(out.Tids) == 0 {
+		out.Tids = base.Tids
+	}
+	if len(out.SysTids) == 0 {
+		out.SysTids = base.SysTids
+	}
+	if out.ShopID == "" {
+		out.ShopID = base.ShopID
+	}
+	if out.ShopName == "" {
+		out.ShopName = base.ShopName
+	}
+	normalizeAgentType(&out)
+	return out
 }
 
 func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
@@ -356,9 +455,19 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 				OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"]),
 				Price:   asFloat(order["payment"], order["price"]),
 			})
+			mergeAfterSaleFromOrder(item, order)
+		}
+		if item.PlatformOrderStatus == "" {
+			item.PlatformOrderStatus = asString(pkg["platformOrderStatus"], pkg["orderStatus"], pkg["status"])
+		}
+		if item.PlatformOrderStatusText == "" {
+			item.PlatformOrderStatusText = ResolveOrderStatusText(
+				asString(pkg["statusDesc"], pkg["platformOrderStatusDesc"], pkg["tradeStatusDesc"]),
+				item.PlatformOrderStatus,
+			)
 		}
 		if item.StatusText == "" {
-			item.StatusText = TradeStatusLabel(asString(pkg["platformOrderStatus"], pkg["tradeStatus"], item.TradeStatus))
+			item.StatusText = item.PlatformOrderStatusText
 		}
 		return item
 	}
@@ -432,8 +541,11 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 			asString(trade["receiverAddress"], trade["receiverAddressMask"]),
 		)
 	}
+	if item.PlatformOrderStatus == "" {
+		item.PlatformOrderStatus = asString(trade["platformOrderStatus"], trade["orderStatus"], trade["status"])
+	}
 	if item.TradeStatus == "" {
-		item.TradeStatus = asString(trade["status"], trade["tradeStatus"], trade["platformOrderStatus"])
+		item.TradeStatus = asString(trade["tradeStatus"], trade["status"], trade["platformOrderStatus"])
 	}
 	if item.Payment == 0 {
 		item.Payment = asFloat(trade["payment"], trade["payAmount"])
@@ -450,8 +562,23 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 	if item.ShopID == "" {
 		item.ShopID = asString(trade["shopId"], trade["mallUserId"], trade["ownerShopId"])
 	}
+	if item.PlatformOrderStatusText == "" {
+		item.PlatformOrderStatusText = ResolveOrderStatusText(
+			asString(trade["statusDesc"], trade["platformOrderStatusDesc"], trade["tradeStatusDesc"]),
+			item.PlatformOrderStatus,
+		)
+	}
 	if item.StatusText == "" {
 		item.StatusText = asString(trade["statusDesc"], trade["tradeStatusDesc"])
+	}
+	if item.AfterSaleStatus == "" {
+		item.AfterSaleStatus = asString(trade["afterSaleStatus"], trade["refundStatus"])
+	}
+	if item.AfterSaleStatusText == "" && item.AfterSaleStatus != "" {
+		item.AfterSaleStatusText = firstNonEmpty(
+			asString(trade["afterSaleStatusText"], trade["refundStatusDesc"]),
+			AfterSaleStatusLabel(item.AfterSaleStatus),
+		)
 	}
 	if item.BuyerMemo == "" {
 		item.BuyerMemo = asString(trade["buyerMemo"], trade["buyerMessage"], trade["buyerMessageMemo"])
@@ -466,13 +593,67 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 		item.PrinterMemo = asString(trade["printerMemo"], trade["dadanMemo"])
 	}
 	if item.FactoryID == "" {
-		item.FactoryID = asString(trade["factoryId"])
+		item.FactoryID = asString(trade["factoryId"], trade["factoryUserId"], trade["factoryUserID"], trade["pushFactoryId"])
 	}
 	if item.FactoryName == "" {
-		item.FactoryName = asString(trade["factoryName"])
+		item.FactoryName = asString(trade["factoryName"], trade["factoryNick"], trade["factoryUserName"], trade["pushFactoryName"])
 	}
-	if item.AgentType == 0 {
-		item.AgentType = asInt(trade["agentType"])
+	if at := asInt(trade["agentType"], trade["tradeAgentType"], trade["daifaType"]); at != 0 {
+		item.AgentType = at
+	}
+	normalizeAgentType(item)
+}
+
+// normalizeAgentType 以快递助手真实代发信息为准：有厂家则视为推厂家代发。
+func normalizeAgentType(item *TradeListItem) {
+	if item == nil {
+		return
+	}
+	switch item.AgentType {
+	case AgentTypePushFactory:
+		return
+	case AgentTypeSelfPrint:
+		// 明确自营时保留；若接口仍带厂家名，不强制改写
+		return
+	default:
+		if strings.TrimSpace(item.FactoryID) != "" || strings.TrimSpace(item.FactoryName) != "" {
+			item.AgentType = AgentTypePushFactory
+		}
+	}
+}
+
+func mergeAfterSaleFromOrder(item *TradeListItem, order map[string]any) {
+	if item == nil || order == nil {
+		return
+	}
+	status := asString(order["afterSaleStatus"], order["refundStatus"])
+	if status == "" {
+		return
+	}
+	// 优先保留进行中的售后；否则后写覆盖
+	if item.AfterSaleStatus == "" || afterSalePriority(status) >= afterSalePriority(item.AfterSaleStatus) {
+		item.AfterSaleStatus = status
+		item.AfterSaleStatusText = firstNonEmpty(
+			asString(order["afterSaleStatusText"], order["refundStatusDesc"]),
+			AfterSaleStatusLabel(status),
+		)
+	}
+	if plat := asString(order["orderStatus"], order["platformOrderStatus"]); plat != "" && item.PlatformOrderStatus == "" {
+		item.PlatformOrderStatus = plat
+	}
+}
+
+func afterSalePriority(status string) int {
+	switch strings.ToUpper(strings.TrimSpace(status)) {
+	case "WAIT_SELLER_AGREE", "WAIT_BUYER_RETURN_ITEM", "WAIT_SELLER_CONFIRM_RECEIVE", "WAIT_BUYER_MODIFY",
+		"WAIT_SEND_EXCHANGE_ITEM", "WAIT_RECEIVE_EXCHANGE_ITEM":
+		return 3
+	case "REFUND_SUCCESS":
+		return 2
+	case "SELLER_REFUSAL_REFUND", "SELLER_REFUSE", "REFUND_CLOSE":
+		return 1
+	default:
+		return 0
 	}
 }
 
