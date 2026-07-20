@@ -522,6 +522,41 @@ func (s *SyncService) SetOrderAgentType(ctx context.Context, req SetOrderAgentTy
 	})
 }
 
+// ShipCallbackRequest 订单中心回传物流信息。
+type ShipCallbackRequest struct {
+	Platform       string `json:"platform"`
+	ShopID         string `json:"shopId"`
+	PlatformTid    string `json:"platformTid"`
+	PlatformSysTid string `json:"platformSysTid"`
+	ExpressCompany string `json:"expressCompany"`
+	ExpressNo      string `json:"expressNo"`
+	OrderNo        string `json:"orderNo"`
+	Remark         string `json:"remark"`
+}
+
+type ShipCallbackResult struct {
+	Accepted bool   `json:"accepted"`
+	Message  string `json:"message"`
+}
+
+// ShipCallback 接收 OrderCore 物流回传。
+// 当前先校验并落日志，后续对接快递助手/电商平台「上传运单号」接口完成真实发货。
+func (s *SyncService) ShipCallback(ctx context.Context, req ShipCallbackRequest) (*ShipCallbackResult, error) {
+	if strings.TrimSpace(req.ExpressNo) == "" {
+		return nil, fmt.Errorf("expressNo is required")
+	}
+	if strings.TrimSpace(req.PlatformTid) == "" && strings.TrimSpace(req.PlatformSysTid) == "" {
+		return nil, fmt.Errorf("platformTid or platformSysTid is required")
+	}
+	// TODO: 对接 KDZS / 平台发货 API（按 platform + tid 上传运单号）
+	_ = ctx
+	_ = s
+	return &ShipCallbackResult{
+		Accepted: true,
+		Message:  fmt.Sprintf("已接收物流回传（待对接平台发货）: %s %s", req.ExpressCompany, req.ExpressNo),
+	}, nil
+}
+
 type RefundQuery struct {
 	Platform          string `form:"platform"`
 	ShopID            string `form:"shopId"`
