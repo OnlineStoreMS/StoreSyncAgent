@@ -101,7 +101,7 @@ async function loadOrders() {
       pageNo: filters.pageNo,
       pageSize: filters.pageSize,
     })
-    orders.value = data.items || []
+    orders.value = sortOrdersByCreateTimeDesc(data.items || [])
     orderTotal.value = data.total || 0
     orderStats.value = data.stats
     orderHint.value = data.hint || ''
@@ -111,6 +111,17 @@ async function loadOrders() {
   } finally {
     loading.orders = false
   }
+}
+
+function sortOrdersByCreateTimeDesc(list: Order[]) {
+  return list.slice().sort((a, b) => {
+    const va = (a.createTime || a.payTime || '').trim()
+    const vb = (b.createTime || b.payTime || '').trim()
+    if (!va && !vb) return 0
+    if (!va) return 1
+    if (!vb) return -1
+    return vb.localeCompare(va)
+  })
 }
 
 function onFilterChange() {
@@ -346,11 +357,12 @@ function sortByPayment(a: Order, b: Order) {
 }
 
 function sortByCreateTime(a: Order, b: Order) {
-  return compareNullableTime(a, b, (row) => row.createTime)
+  // Element Plus descending 时会反向使用本比较器；返回升序基线
+  return compareNullableTime(a, b, (row) => row.createTime || row.payTime)
 }
 
 function sortByPayTime(a: Order, b: Order) {
-  return compareNullableTime(a, b, (row) => row.payTime)
+  return compareNullableTime(a, b, (row) => row.payTime || row.createTime)
 }
 
 async function refreshForAccountSwitch() {
@@ -475,7 +487,7 @@ onMounted(async () => {
         stripe
         border
         empty-text="暂无订单"
-        :default-sort="{ prop: 'payTime', order: 'descending' }"
+        :default-sort="{ prop: 'createTime', order: 'descending' }"
         @selection-change="(rows: Order[]) => (selectedOrders = rows)"
       >
         <el-table-column type="selection" width="48" fixed="left" />

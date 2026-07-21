@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -199,6 +200,7 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 	}
 
 	finalizeTradeListItems(items, q.TradeStatus)
+	SortTradeItemsByOrderTimeDesc(items)
 
 	return &TradeListResult{
 		Total:    resp.Total,
@@ -206,6 +208,29 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 		PageSize: resp.PageSize,
 		Items:    items,
 	}, nil
+}
+
+// SortTradeItemsByOrderTimeDesc 按下单时间（无则付款时间）倒序，最近在前。
+// 「全部」等状态下快递助手原序可能按状态分组，需统一重排（仅影响当前页）。
+func SortTradeItemsByOrderTimeDesc(items []TradeListItem) {
+	if len(items) < 2 {
+		return
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		ti := tradeOrderTimeKey(items[i])
+		tj := tradeOrderTimeKey(items[j])
+		if ti == tj {
+			return false
+		}
+		return ti > tj
+	})
+}
+
+func tradeOrderTimeKey(it TradeListItem) string {
+	if t := strings.TrimSpace(it.CreateTime); t != "" {
+		return t
+	}
+	return strings.TrimSpace(it.PayTime)
 }
 
 func (s *Session) QueryTradesRaw(ctx context.Context, q TradeQuery) (map[string]any, error) {

@@ -318,6 +318,7 @@ func (s *SyncService) listOrdersAllPlatforms(ctx context.Context, q OrderQuery) 
 		allItems = append(allItems, result.Items...)
 	}
 
+	kdzs.SortTradeItemsByOrderTimeDesc(allItems)
 	if len(allItems) > pageSize {
 		allItems = allItems[:pageSize]
 	}
