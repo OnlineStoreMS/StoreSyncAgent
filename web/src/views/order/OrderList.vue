@@ -43,6 +43,8 @@ const platformOptions = [
 const statusOptions = [
   { label: '待推单', value: 'wait_audit' },
   { label: '待发货', value: 'wait_send' },
+  { label: '已发货', value: 'shipped' },
+  { label: '已完成', value: 'completed' },
   { label: '全部', value: 'all' },
 ]
 
@@ -114,6 +116,10 @@ async function loadOrders() {
 function onFilterChange() {
   filters.pageNo = 1
   loadOrders()
+}
+
+function onTradeStatusChange(_status: string) {
+  onFilterChange()
 }
 
 function onStatCardClick(tradeStatus: string) {
@@ -446,7 +452,7 @@ onMounted(async () => {
             <el-select v-model="filters.shopId" placeholder="店铺" clearable style="width: 200px" @change="onFilterChange">
               <el-option v-for="shop in kdzsStore.shops" :key="shop.mallUserId" :label="shop.mallUserName" :value="shop.mallUserId" />
             </el-select>
-            <el-select v-model="filters.tradeStatus" style="width: 120px" @change="onFilterChange">
+            <el-select v-model="filters.tradeStatus" style="width: 120px" @change="onTradeStatusChange">
               <el-option v-for="opt in statusOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
             </el-select>
             <el-button type="primary" :loading="loading.orders" @click="loadOrders">查询</el-button>
@@ -458,6 +464,9 @@ onMounted(async () => {
             <el-tag v-for="tag in filterSummaryTags" :key="tag" type="info" effect="plain">{{ tag }}</el-tag>
           </div>
         </div>
+        <p v-if="filters.tradeStatus === 'all'" class="filter-tip muted">
+          「全部」= 上方时间范围内各状态订单（待推/待发/已发/完成等），可翻页查看。
+        </p>
       </div>
 
       <el-table
@@ -571,11 +580,13 @@ onMounted(async () => {
       <div class="pager">
         <el-pagination
           background
-          layout="total, prev, pager, next"
+          layout="total, sizes, prev, pager, next"
           :total="orderTotal"
           :page-size="filters.pageSize"
+          :page-sizes="[20, 50, 100]"
           :current-page="filters.pageNo"
           @current-change="onPageChange"
+          @size-change="(size: number) => { filters.pageSize = size; filters.pageNo = 1; loadOrders() }"
         />
       </div>
     </el-card>
@@ -646,6 +657,11 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+.filter-tip {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 .pager {
   margin-top: 16px;

@@ -20,6 +20,11 @@ export function defaultDateRange(): [string, string] {
   return [formatDateTime(start), formatDateTime(end)]
 }
 
+/** 「全部」状态默认近 30 天（各状态合集） */
+export function allOrdersDateRange(): [string, string] {
+  return defaultDateRange()
+}
+
 export const dateShortcuts = [
   {
     text: '近7天',
@@ -39,6 +44,28 @@ export const dateShortcuts = [
       end.setHours(23, 59, 59, 0)
       const start = new Date()
       start.setDate(start.getDate() - 29)
+      start.setHours(0, 0, 0, 0)
+      return [start, end]
+    },
+  },
+  {
+    text: '近1年',
+    value: () => {
+      const end = new Date()
+      end.setHours(23, 59, 59, 0)
+      const start = new Date()
+      start.setFullYear(start.getFullYear() - 1)
+      start.setHours(0, 0, 0, 0)
+      return [start, end]
+    },
+  },
+  {
+    text: '近2年',
+    value: () => {
+      const end = new Date()
+      end.setHours(23, 59, 59, 0)
+      const start = new Date()
+      start.setFullYear(start.getFullYear() - 2)
       start.setHours(0, 0, 0, 0)
       return [start, end]
     },

@@ -121,6 +121,14 @@ func ResolveDateRange(start, end string) (string, string) {
 	return DefaultDateRange()
 }
 
+// ResolveAllOrdersDateRange 「全部」状态默认近 30 天（与列表默认一致），覆盖各履约状态。
+func ResolveAllOrdersDateRange(start, end string) (string, string) {
+	if start != "" && end != "" {
+		return start, end
+	}
+	return DefaultDateRange()
+}
+
 func ResolveTradeSearchDateRange(start, end string) (string, string) {
 	if start != "" && end != "" {
 		return start, end
@@ -231,18 +239,27 @@ func (s *Session) QueryTradesRaw(ctx context.Context, q TradeQuery) (map[string]
 
 func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (tradeListRequest, error) {
 	userID, _ := strconv.ParseInt(s.UserID(), 10, 64)
+	statusKey := strings.ToLower(strings.TrimSpace(q.TradeStatus))
 	start, end := ResolveDateRange(q.StartDateTime, q.EndDateTime)
 	if strings.TrimSpace(q.Tid) != "" {
 		start, end = ResolveTradeSearchDateRange(q.StartDateTime, q.EndDateTime)
 	}
 	timeType := q.TimeType
 
+	apiStatus := TradeStatusToAPIStatus(q.TradeStatus)
+	tradeStatus := q.TradeStatus
+	// 全部：快递助手以 status=ALL_STATUS 为准，时间窗沿用上方筛选（未传则近 30 天）
+	if statusKey == "all" {
+		tradeStatus = ""
+		apiStatus = "ALL_STATUS"
+	}
+
 	body := tradeListRequest{
 		RDSUser:       true,
 		AsyncCode:     "",
 		Platform:      q.Platform,
-		TradeStatus:   q.TradeStatus,
-		Status:        TradeStatusToAPIStatus(q.TradeStatus),
+		TradeStatus:   tradeStatus,
+		Status:        apiStatus,
 		PageNo:        q.PageNo,
 		PageSize:      q.PageSize,
 		UserID:        userID,
