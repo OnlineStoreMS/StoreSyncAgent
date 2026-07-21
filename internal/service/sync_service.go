@@ -239,6 +239,20 @@ func (s *SyncService) ListOrders(ctx context.Context, q OrderQuery) (*OrderListV
 				result.Stats.TabWaitAudit = c.WaitAudit
 				result.Stats.TabWaitSend = c.WaitSend
 			}
+		} else if shops, err := s.client.ListEcommerceShops(ctx); err == nil {
+			// 全平台：汇总各平台待推/待发数量
+			for i, p := range uniquePlatforms(shops) {
+				if i > 0 {
+					select {
+					case <-ctx.Done():
+					case <-time.After(800 * time.Millisecond):
+					}
+				}
+				if c, err := s.session.GetWaitSendCount(ctx, p, nil, nil, nil); err == nil && c != nil {
+					result.Stats.TabWaitAudit += c.WaitAudit
+					result.Stats.TabWaitSend += c.WaitSend
+				}
+			}
 		}
 	}
 
@@ -298,36 +312,75 @@ func (s *SyncService) listOrdersAllPlatforms(ctx context.Context, q OrderQuery) 
 		return &OrderListView{Items: []kdzs.TradeListItem{}}, nil
 	}
 
+	pageNo := q.PageNo
+	if pageNo <= 0 {
+		pageNo = 1
+	}
 	pageSize := q.PageSize
 	if pageSize <= 0 {
 		pageSize = 20
 	}
 
+	// 各平台拉全量（按筛选条件），合并后再本地分页，保证待推/待发/全部跨平台完整
+	fetchSize := pageSize
+	if fetchSize < 50 {
+		fetchSize = 50
+	}
 	allItems := make([]kdzs.TradeListItem, 0)
-	total := 0
-	for _, platform := range platforms {
-		pq := q
-		pq.Platform = platform
-		pq.PageNo = 1
-		pq.PageSize = pageSize
-		result, err := s.session.QueryTrades(ctx, s.toTradeQuery(pq))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", platform, err)
+	for i, platform := range platforms {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(3500 * time.Millisecond):
+			}
 		}
-		total += result.Total
-		allItems = append(allItems, result.Items...)
+		for page := 1; ; page++ {
+			if page > 1 {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(3500 * time.Millisecond):
+				}
+			}
+			pq := q
+			pq.Platform = platform
+			pq.PageNo = page
+			pq.PageSize = fetchSize
+			result, err := s.session.QueryTrades(ctx, s.toTradeQuery(pq))
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", platform, err)
+			}
+			allItems = append(allItems, result.Items...)
+			if len(result.Items) == 0 {
+				break
+			}
+			if result.Total > 0 && page*fetchSize >= result.Total {
+				break
+			}
+			if result.Total <= 0 && len(result.Items) < fetchSize {
+				break
+			}
+		}
 	}
 
 	kdzs.SortTradeItemsByOrderTimeDesc(allItems)
-	if len(allItems) > pageSize {
-		allItems = allItems[:pageSize]
+	total := len(allItems)
+	start := (pageNo - 1) * pageSize
+	if start > total {
+		start = total
 	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	pageItems := allItems[start:end]
 
 	return &OrderListView{
 		Total:    total,
-		PageNo:   1,
+		PageNo:   pageNo,
 		PageSize: pageSize,
-		Items:    allItems,
+		Items:    pageItems,
 	}, nil
 }
 
@@ -521,6 +574,30 @@ func (s *SyncService) SetOrderAgentType(ctx context.Context, req SetOrderAgentTy
 		TradeStatus: req.TradeStatus,
 		AgentType:   agentType,
 		FactoryID:   req.FactoryID,
+		SysTids:     req.SysTids,
+	})
+}
+
+type CancelOrderPushRequest struct {
+	Platform    string   `json:"platform"`
+	TradeStatus string   `json:"tradeStatus"`
+	SysTids     []string `json:"sysTids"`
+}
+
+// CancelOrderPush 撤回推单/退审：快递助手待发货 → 待推单。
+func (s *SyncService) CancelOrderPush(ctx context.Context, req CancelOrderPushRequest) (*kdzs.AgentTypeResult, error) {
+	if err := s.ensureLogin(ctx); err != nil {
+		return nil, err
+	}
+	if req.Platform == "" {
+		return nil, fmt.Errorf("platform is required")
+	}
+	if len(req.SysTids) == 0 {
+		return nil, fmt.Errorf("sysTids is required")
+	}
+	return s.session.CancelTradePush(ctx, kdzs.CancelTradePushRequest{
+		Platform:    req.Platform,
+		TradeStatus: req.TradeStatus,
 		SysTids:     req.SysTids,
 	})
 }

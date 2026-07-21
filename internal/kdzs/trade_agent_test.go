@@ -55,7 +55,10 @@ func TestParseDropshipUsesDaifaStatusAndFactoryName(t *testing.T) {
 }
 
 func TestInferKDZSListStatus(t *testing.T) {
-	if got := InferKDZSListStatus("ORDER_PAID", "待发货"); got != "wait_send" {
+	if got := InferKDZSListStatus("ORDER_PAID", "待发货"); got != "" {
+		t.Fatalf("ecommerce 待发货 must not infer wait_send, got %q", got)
+	}
+	if got := InferKDZSListStatus("ORDER_PAID", "待推单"); got != "wait_audit" {
 		t.Fatalf("got %q", got)
 	}
 	if got := InferKDZSListStatus("wait_send", "x"); got != "wait_send" {

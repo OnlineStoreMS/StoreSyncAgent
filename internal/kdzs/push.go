@@ -166,3 +166,85 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 		FailMessage: resp.FailMessage,
 	}, nil
 }
+
+type CancelTradePushRequest struct {
+	Platform    string
+	TradeStatus string
+	SysTids     []string
+}
+
+type cancelTradePushResponse struct {
+	Result           int               `json:"result"`
+	Message          string            `json:"message"`
+	ErrorMessage     string            `json:"errorMessage"`
+	AllSuccess       bool              `json:"allSuccess"`
+	AllFail          bool              `json:"allFail"`
+	SuccessList      []string          `json:"successList"`
+	FailList         []string          `json:"failList"`
+	FailMessage      map[string]string `json:"failMessageMap"`
+	SuccessRealList  []string          `json:"successRealList"`
+}
+
+// CancelTradePush 快递助手「批量撤单/退审」：待发货回退到待推单。
+func (s *Session) CancelTradePush(ctx context.Context, req CancelTradePushRequest) (*AgentTypeResult, error) {
+	if len(req.SysTids) == 0 {
+		return nil, fmt.Errorf("sysTids is required")
+	}
+	tradeStatus := req.TradeStatus
+	if tradeStatus == "" {
+		tradeStatus = "wait_send"
+	}
+	tradeInfoList, err := s.BuildTradeInfoList(ctx, req.Platform, tradeStatus, req.SysTids)
+	if err != nil {
+		return nil, err
+	}
+	if len(tradeInfoList) == 0 {
+		// 已不在待发货：再试待推单，便于幂等（已撤则视为成功）
+		if tradeStatus != "wait_audit" {
+			tradeInfoList, err = s.BuildTradeInfoList(ctx, req.Platform, "wait_audit", req.SysTids)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if len(tradeInfoList) == 0 {
+			return nil, fmt.Errorf("快递助手未找到可撤单订单")
+		}
+		// 已在待推单，无需再撤
+		return &AgentTypeResult{SuccessList: req.SysTids}, nil
+	}
+
+	ps, err := s.PlatformSession(ctx, req.Platform)
+	if err != nil {
+		return nil, err
+	}
+	body := map[string]any{"tradeInfoList": tradeInfoList}
+	var resp cancelTradePushResponse
+	if err := s.client.postPlatform(ctx, ps, "/tradeManage/batchCancelCheck", body, &resp); err != nil {
+		return nil, err
+	}
+	failMsg := firstNonEmpty(resp.Message, resp.ErrorMessage, "")
+	if len(resp.FailMessage) > 0 {
+		for _, v := range resp.FailMessage {
+			if strings.TrimSpace(v) != "" {
+				failMsg = v
+				break
+			}
+		}
+	}
+	// 已在待推/待撤：幂等成功
+	if strings.Contains(failMsg, "待撤单") || strings.Contains(failMsg, "待推单") {
+		return &AgentTypeResult{SuccessList: req.SysTids, FailMessage: resp.FailMessage}, nil
+	}
+	ok := resp.Result == 0 || resp.Result == ResultSuccess || resp.Result == 100
+	if ok && (resp.AllSuccess || len(resp.SuccessList) > 0) {
+		return &AgentTypeResult{
+			SuccessList: resp.SuccessList,
+			FailList:    resp.FailList,
+			FailMessage: resp.FailMessage,
+		}, nil
+	}
+	if failMsg == "" {
+		failMsg = "快递助手撤单失败"
+	}
+	return nil, fmt.Errorf("%s", failMsg)
+}

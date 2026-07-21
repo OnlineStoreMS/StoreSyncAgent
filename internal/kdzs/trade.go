@@ -374,6 +374,7 @@ func preservePlatformOrderStatus(item *TradeListItem) {
 }
 
 // InferKDZSListStatus 从文案或混入的电商状态推断快递助手列表态。
+// 注意：电商 ORDER_PAID 的中文也是「待发货」，不能单凭文案当成 wait_send。
 func InferKDZSListStatus(tradeStatus, statusText string) string {
 	if IsKDZSListStatus(tradeStatus) {
 		return strings.ToLower(strings.TrimSpace(tradeStatus))
@@ -383,7 +384,8 @@ func InferKDZSListStatus(tradeStatus, statusText string) string {
 	case "待推单":
 		return "wait_audit"
 	case "待发货":
-		return "wait_send"
+		// 仅当原状态已是快递助手码时上面已返回；电商「待发货」无法区分待推单/待发货
+		return ""
 	case "已发货":
 		return "shipped"
 	case "交易完成", "已完成":

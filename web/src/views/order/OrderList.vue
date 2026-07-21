@@ -21,7 +21,7 @@ const selectedFactoryId = ref('')
 const [defaultStart, defaultEnd] = defaultDateRange()
 
 const filters = reactive({
-  platform: 'FXG',
+  platform: '',
   shopId: '',
   tradeStatus: 'wait_audit',
   timeType: 0,
@@ -86,6 +86,10 @@ const statCards = computed(() => [
     tradeStatus: 'wait_send',
   },
 ])
+
+function platformLabel(code: string) {
+  return platformOptions.find((o) => o.value === code)?.label || code
+}
 
 async function loadOrders() {
   loading.orders = true
@@ -407,9 +411,13 @@ onMounted(async () => {
           </div>
           <div
             class="stat-sub muted"
-            v-if="card.tradeStatus === 'wait_audit' && orderStats.waitingPushByPlatform?.FXG"
+            v-if="card.tradeStatus === 'wait_audit' && orderStats.waitingPushByPlatform && Object.keys(orderStats.waitingPushByPlatform).length"
           >
-            抖店 {{ orderStats.waitingPushByPlatform.FXG }}
+            <span
+              v-for="(n, code) in orderStats.waitingPushByPlatform"
+              :key="code"
+              class="plat-stat"
+            >{{ platformLabel(String(code)) }} {{ n }}</span>
           </div>
         </div>
       </div>
@@ -458,7 +466,7 @@ onMounted(async () => {
         <div class="filter-row">
           <span class="filter-label">其他条件</span>
           <div class="filters">
-            <el-select v-model="filters.platform" placeholder="平台" clearable style="width: 120px" @change="onFilterChange">
+            <el-select v-model="filters.platform" placeholder="全部平台" clearable style="width: 120px" @change="onFilterChange">
               <el-option v-for="opt in platformOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
             </el-select>
             <el-select v-model="filters.shopId" placeholder="店铺" clearable style="width: 200px" @change="onFilterChange">
@@ -476,6 +484,9 @@ onMounted(async () => {
             <el-tag v-for="tag in filterSummaryTags" :key="tag" type="info" effect="plain">{{ tag }}</el-tag>
           </div>
         </div>
+        <p v-if="!filters.platform" class="filter-tip muted">
+          未选平台时汇总已授权全部电商平台（抖店/淘宝等）订单。
+        </p>
         <p v-if="filters.tradeStatus === 'all'" class="filter-tip muted">
           「全部」= 上方时间范围内各状态订单（待推/待发/已发/完成等），可翻页查看。
         </p>
@@ -765,6 +776,9 @@ onMounted(async () => {
 }
 .stat-sub {
   margin-top: 4px;
+}
+.plat-stat + .plat-stat::before {
+  content: ' · ';
 }
 .hint {
   margin-top: 8px;
