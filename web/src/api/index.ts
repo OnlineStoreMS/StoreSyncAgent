@@ -17,6 +17,8 @@ export interface TradeGoods {
   picUrl?: string
   num?: number
   outerId?: string
+  skuId?: string
+  itemId?: string
   price?: number
 }
 
@@ -40,6 +42,7 @@ export interface Order {
   decrypted?: boolean
   formattedReceiver?: string
   payment?: number
+  postFee?: number
   tradeStatus?: string
   statusText?: string
   createTime?: string

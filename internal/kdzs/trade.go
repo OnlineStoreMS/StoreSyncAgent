@@ -40,6 +40,7 @@ type TradeListItem struct {
 	ReceiverMobile  string         `json:"receiverMobile,omitempty"`
 	ReceiverAddress string         `json:"receiverAddress,omitempty"`
 	Payment         float64        `json:"payment,omitempty"`
+	PostFee         float64        `json:"postFee,omitempty"` // 邮费
 	TradeStatus     string         `json:"tradeStatus,omitempty"` // 快递助手列表态：wait_audit/wait_send
 	StatusText      string         `json:"statusText,omitempty"`  // 快递助手列表态文案
 	PlatformOrderStatus     string `json:"platformOrderStatus,omitempty"`     // 电商平台订单状态码
@@ -69,6 +70,8 @@ type TradeGoods struct {
 	PicURL  string  `json:"picUrl,omitempty"`
 	Num     int     `json:"num,omitempty"`
 	OuterID string  `json:"outerId,omitempty"`
+	SkuID   string  `json:"skuId,omitempty"`   // 平台 SKU ID
+	ItemID  string  `json:"itemId,omitempty"`  // 平台商品/货品 ID
 	Price   float64 `json:"price,omitempty"`
 }
 
@@ -496,8 +499,11 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 				SkuName: asString(order["skuName"], order["colorName"], order["skuPropertiesName"]),
 				PicURL:  asString(order["picUrl"], order["skuPicUrl"], order["picPath"], order["itemPic"]),
 				Num:     asInt(order["num"], order["buyNum"]),
-				OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"]),
-				Price:   asFloat(order["payment"], order["price"]),
+				OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
+				SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
+				ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
+				// price=商品价/商家侧；payment=用户实付（可能已扣券），明细单价用 price
+				Price: asFloat(order["price"], order["totalFee"], order["payment"]),
 			})
 			mergeAfterSaleFromOrder(item, order)
 		}
@@ -560,8 +566,10 @@ func parseTradeItemLegacyTrades(item *TradeListItem, trades []any) *TradeListIte
 					SkuName: asString(order["skuPropertiesName"], order["skuName"]),
 					PicURL:  asString(order["picUrl"], order["skuPicUrl"], order["picPath"], order["itemPic"]),
 					Num:     asInt(order["num"], order["buyNum"]),
-					OuterID: asString(order["outerId"], order["outerIid"]),
-					Price:   asFloat(order["price"], order["payment"]),
+					OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
+					SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
+					ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
+					Price:   asFloat(order["price"], order["totalFee"], order["payment"]),
 				})
 			}
 		}
@@ -593,6 +601,9 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 	}
 	if item.Payment == 0 {
 		item.Payment = asFloat(trade["payment"], trade["payAmount"])
+	}
+	if item.PostFee == 0 {
+		item.PostFee = asFloat(trade["postfee"], trade["postFee"], trade["post_fee"], trade["freight"], trade["freightFee"])
 	}
 	if item.CreateTime == "" {
 		item.CreateTime = asString(trade["created"], trade["createTime"])
