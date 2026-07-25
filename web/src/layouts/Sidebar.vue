@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { HomeFilled, List, OfficeBuilding, Service, Shop, User } from '@element-plus/icons-vue'
+import { HomeFilled, List, OfficeBuilding, Service, Shop, User, Goods } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +13,7 @@ const menuItems = [
   { path: '/dashboard', title: '工作台', icon: HomeFilled },
   { path: '/kdzs-accounts', title: '账号管理', icon: User },
   { path: '/shops', title: '店铺管理', icon: Shop },
+  { path: '/products', title: '商品管理', icon: Goods },
   { path: '/factories', title: '厂家管理', icon: OfficeBuilding },
   { path: '/orders', title: '订单列表', icon: List },
 ]

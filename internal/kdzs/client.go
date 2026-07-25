@@ -122,6 +122,31 @@ func (c *Client) PostPlatform(ctx context.Context, ps *PlatformSession, path str
 	return c.postPlatform(ctx, ps, path, body, out)
 }
 
+func (c *Client) getPlatform(ctx context.Context, ps *PlatformSession, path string, out any) error {
+	urlStr := "https://" + ps.Host + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Mozilla/5.0")
+	req.Header.Set("Origin", "https://"+ps.Host)
+	if ps.Referer != "" {
+		req.Header.Set("Referer", ps.Referer)
+	}
+	if ps.Token != "" {
+		req.Header.Set("qnquerystring", ps.Token)
+	}
+	if ch := ps.CookieHeader(); ch != "" {
+		req.Header.Set("Cookie", ch)
+	}
+	return c.do(req, out)
+}
+
+func (c *Client) GetPlatform(ctx context.Context, ps *PlatformSession, path string, out any) error {
+	return c.getPlatform(ctx, ps, path, out)
+}
+
 func (c *Client) postPlatformForm(ctx context.Context, ps *PlatformSession, path string, form url.Values, out any) error {
 	urlStr := "https://" + ps.Host + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, strings.NewReader(form.Encode()))

@@ -130,6 +130,73 @@ export async function listShops() {
   return unwrap(await http.get<{ items: Shop[]; total: number }>('/shops'))
 }
 
+export interface ProductSku {
+  skuId?: string
+  propertiesName?: string
+  price?: string
+  quantity?: number
+  outerId?: string
+  picUrl?: string
+  shortTitle?: string
+  status?: string
+  productNum?: string
+}
+
+export interface Product {
+  itemId: string
+  title?: string
+  shortTitle?: string
+  outerId?: string
+  picUrl?: string
+  price?: string
+  stock?: number
+  platform?: string
+  platformName?: string
+  shopId?: string
+  shopName?: string
+  approveStatus?: string
+  approveStatusLabel?: string
+  productNum?: string
+  bindTime?: string
+  skus?: ProductSku[]
+}
+
+export interface ProductListResponse {
+  total: number
+  pageNo: number
+  pageSize: number
+  items: Product[]
+  platform?: string
+}
+
+export interface ProductSyncProgress {
+  finish?: boolean
+  process?: number
+  syncItemCount?: Record<string, number>
+  errorMessage?: string
+  finishSyncDate?: string
+}
+
+export async function listProducts(params: {
+  platform?: string
+  shopId?: string
+  title?: string
+  itemIds?: string
+  outerId?: string
+  pageNo?: number
+  pageSize?: number
+}) {
+  return unwrap(await http.get<ProductListResponse>('/products', { params }))
+}
+
+export async function syncProducts(body: { platform: string; shopIds?: string[] }) {
+  return unwrap(await http.post<{ ok: boolean }>('/products/sync', body))
+}
+
+export async function getProductSyncProgress(platform: string) {
+  return unwrap(await http.get<ProductSyncProgress>('/products/sync-progress', { params: { platform } }))
+}
+
 export async function listOrders(params: {
   platform?: string
   shopId?: string

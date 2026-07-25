@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -155,6 +156,303 @@ func (s *SyncService) ListShops(ctx context.Context) ([]ShopView, error) {
 		})
 	}
 	return out, nil
+}
+
+type ItemQuery struct {
+	Platform string `form:"platform"`
+	ShopID   string `form:"shopId"`
+	Title    string `form:"title"`
+	ItemIDs  string `form:"itemIds"`
+	OuterID  string `form:"outerId"`
+	PageNo   int    `form:"pageNo"`
+	PageSize int    `form:"pageSize"`
+}
+
+type ItemSkuView struct {
+	SkuID          string `json:"skuId"`
+	PropertiesName string `json:"propertiesName"`
+	Price          string `json:"price"`
+	Quantity       int    `json:"quantity"`
+	OuterID        string `json:"outerId"`
+	PicURL         string `json:"picUrl"`
+	ShortTitle     string `json:"shortTitle"`
+	Status         string `json:"status"`
+	ProductNum     string `json:"productNum"`
+}
+
+type ItemView struct {
+	ItemID              string        `json:"itemId"`
+	Title               string        `json:"title"`
+	ShortTitle          string        `json:"shortTitle"`
+	OuterID             string        `json:"outerId"`
+	PicURL              string        `json:"picUrl"`
+	Price               string        `json:"price"`
+	Stock               int           `json:"stock"`
+	Platform            string        `json:"platform"`
+	PlatformName        string        `json:"platformName"`
+	ShopID              string        `json:"shopId"`
+	ShopName            string        `json:"shopName"`
+	ApproveStatus       string        `json:"approveStatus"`
+	ApproveStatusLabel  string        `json:"approveStatusLabel"`
+	ProductNum          string        `json:"productNum"`
+	BindTime            string        `json:"bindTime"`
+	Skus                []ItemSkuView `json:"skus,omitempty"`
+}
+
+type ItemListView struct {
+	Total    int        `json:"total"`
+	PageNo   int        `json:"pageNo"`
+	PageSize int        `json:"pageSize"`
+	Items    []ItemView `json:"items"`
+	Platform string     `json:"platform,omitempty"`
+}
+
+func toItemView(item kdzs.ShopItem) ItemView {
+	skus := make([]ItemSkuView, 0, len(item.Skus))
+	for _, sku := range item.Skus {
+		skus = append(skus, ItemSkuView{
+			SkuID:          sku.SkuID,
+			PropertiesName: sku.PropertiesName,
+			Price:          sku.Price,
+			Quantity:       sku.Quantity,
+			OuterID:        sku.OuterID,
+			PicURL:         sku.PicURL,
+			ShortTitle:     sku.ShortTitle,
+			Status:         sku.Status,
+			ProductNum:     sku.ProductNum,
+		})
+	}
+	platform := item.Platform
+	return ItemView{
+		ItemID:             item.NumIid,
+		Title:              item.Title,
+		ShortTitle:         item.ShortTitle,
+		OuterID:            item.OuterID,
+		PicURL:             item.PicURL,
+		Price:              item.Price,
+		Stock:              item.Num,
+		Platform:           platform,
+		PlatformName:       kdzs.PlatformLabel(platform),
+		ShopID:             item.ShopID,
+		ShopName:           item.ShopName,
+		ApproveStatus:      item.ApproveStatus,
+		ApproveStatusLabel: kdzs.ItemApproveStatusLabel(item.ApproveStatus),
+		ProductNum:         item.ProductNum,
+		BindTime:           item.BindTime,
+		Skus:               skus,
+	}
+}
+
+func splitShopIDs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if id := strings.TrimSpace(p); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+func resolveItemPlatforms(shops []kdzs.BindShop, platform, shopIDRaw string) map[string][]string {
+	shopByID := make(map[string]kdzs.BindShop, len(shops))
+	for _, shop := range shops {
+		shopByID[shop.MallUserID] = shop
+	}
+
+	platform = strings.ToUpper(strings.TrimSpace(platform))
+	requested := splitShopIDs(shopIDRaw)
+
+	if len(requested) > 0 {
+		out := make(map[string][]string)
+		for _, id := range requested {
+			shop, ok := shopByID[id]
+			if !ok {
+				continue
+			}
+			if platform != "" && shop.Platform != platform {
+				continue
+			}
+			out[shop.Platform] = append(out[shop.Platform], shop.MallUserID)
+		}
+		return out
+	}
+
+	if platform == "" {
+		return nil
+	}
+	out := make(map[string][]string)
+	for _, shop := range shops {
+		if shop.Platform == platform {
+			out[platform] = append(out[platform], shop.MallUserID)
+		}
+	}
+	return out
+}
+
+func (s *SyncService) ListItems(ctx context.Context, q ItemQuery) (*ItemListView, error) {
+	if err := s.ensureLogin(ctx); err != nil {
+		return nil, err
+	}
+
+	shops, err := s.client.ListEcommerceShops(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	platformShops := resolveItemPlatforms(shops, q.Platform, q.ShopID)
+	if len(platformShops) == 0 {
+		if q.Platform == "" && q.ShopID == "" {
+			return nil, fmt.Errorf("platform or shopId is required")
+		}
+		return &ItemListView{Items: []ItemView{}}, nil
+	}
+
+	pageNo := q.PageNo
+	if pageNo <= 0 {
+		pageNo = 1
+	}
+	pageSize := q.PageSize
+	if pageSize <= 0 {
+		pageSize = 20
+	}
+
+	if len(platformShops) == 1 {
+		var platform string
+		var shopIDList []string
+		for p, ids := range platformShops {
+			platform = p
+			shopIDList = ids
+		}
+		result, err := s.session.ListShopItems(ctx, platform, kdzs.ItemListQuery{
+			PageNo:     pageNo,
+			PageSize:   pageSize,
+			ShopIDList: shopIDList,
+			Title:      q.Title,
+			ItemIDs:    q.ItemIDs,
+			OuterID:    q.OuterID,
+		})
+		if err != nil {
+			return nil, err
+		}
+		items := make([]ItemView, 0, len(result.List))
+		for _, item := range result.List {
+			items = append(items, toItemView(item))
+		}
+		return &ItemListView{
+			Total:    result.Count,
+			PageNo:   result.PageNo,
+			PageSize: result.PageSize,
+			Items:    items,
+			Platform: platform,
+		}, nil
+	}
+
+	allItems := make([]ItemView, 0)
+	for i, platform := range sortedPlatformKeys(platformShops) {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(800 * time.Millisecond):
+			}
+		}
+		shopIDList := platformShops[platform]
+		for page := 1; ; page++ {
+			result, err := s.session.ListShopItems(ctx, platform, kdzs.ItemListQuery{
+				PageNo:     page,
+				PageSize:   50,
+				ShopIDList: shopIDList,
+				Title:      q.Title,
+				ItemIDs:    q.ItemIDs,
+				OuterID:    q.OuterID,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("%s: %w", platform, err)
+			}
+			for _, item := range result.List {
+				allItems = append(allItems, toItemView(item))
+			}
+			if len(result.List) == 0 {
+				break
+			}
+			if result.Count > 0 && page*50 >= result.Count {
+				break
+			}
+			if len(result.List) < 50 {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(800 * time.Millisecond):
+			}
+		}
+	}
+
+	total := len(allItems)
+	start := (pageNo - 1) * pageSize
+	if start >= total {
+		return &ItemListView{Total: total, PageNo: pageNo, PageSize: pageSize, Items: []ItemView{}}, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return &ItemListView{
+		Total:    total,
+		PageNo:   pageNo,
+		PageSize: pageSize,
+		Items:    allItems[start:end],
+	}, nil
+}
+
+func sortedPlatformKeys(m map[string][]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+func (s *SyncService) SyncItems(ctx context.Context, platform string, shopIDs []string) error {
+	if err := s.ensureLogin(ctx); err != nil {
+		return err
+	}
+	platform = strings.ToUpper(strings.TrimSpace(platform))
+	if platform == "" {
+		return fmt.Errorf("platform is required")
+	}
+	if len(shopIDs) == 0 {
+		shops, err := s.client.ListEcommerceShops(ctx)
+		if err != nil {
+			return err
+		}
+		for _, shop := range shops {
+			if shop.Platform == platform {
+				shopIDs = append(shopIDs, shop.MallUserID)
+			}
+		}
+	}
+	if len(shopIDs) == 0 {
+		return fmt.Errorf("no shops found for platform %s", platform)
+	}
+	return s.session.SyncShopItems(ctx, platform, shopIDs)
+}
+
+func (s *SyncService) GetItemSyncProgress(ctx context.Context, platform string) (*kdzs.SyncProgress, error) {
+	if err := s.ensureLogin(ctx); err != nil {
+		return nil, err
+	}
+	platform = strings.ToUpper(strings.TrimSpace(platform))
+	if platform == "" {
+		return nil, fmt.Errorf("platform is required")
+	}
+	return s.session.GetItemSyncProgress(ctx, platform)
 }
 
 type OrderQuery struct {

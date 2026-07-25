@@ -54,6 +54,61 @@ func (h *Handler) ListShops(c *gin.Context) {
 	response.OK(c, gin.H{"items": shops, "total": len(shops)})
 }
 
+func (h *Handler) ListProducts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var q service.ItemQuery
+	if err := c.ShouldBindQuery(&q); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := svc.ListItems(c.Request.Context(), q)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) SyncProducts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req struct {
+		Platform string   `json:"platform"`
+		ShopIds  []string `json:"shopIds"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := svc.SyncItems(c.Request.Context(), req.Platform, req.ShopIds); err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"ok": true})
+}
+
+func (h *Handler) GetProductSyncProgress(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	platform := c.Query("platform")
+	result, err := svc.GetItemSyncProgress(c.Request.Context(), platform)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
 func (h *Handler) ListOrders(c *gin.Context) {
 	svc, err := h.svc(c)
 	if err != nil {
