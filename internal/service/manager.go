@@ -15,6 +15,7 @@ type Manager struct {
 	kdzsRepo           *repo.KdzsRepo
 	returnExchangeRepo *repo.ReturnExchangeRepo
 	notificationRepo   *repo.NotificationRepo
+	stockAlertRepo     *repo.StockAlertRepo
 	mu                 sync.Mutex
 	services           map[uint64]*SyncService
 }
@@ -24,12 +25,14 @@ func NewManager(
 	kdzsRepo *repo.KdzsRepo,
 	returnExchangeRepo *repo.ReturnExchangeRepo,
 	notificationRepo *repo.NotificationRepo,
+	stockAlertRepo *repo.StockAlertRepo,
 ) *Manager {
 	return &Manager{
 		baseCfg:            baseCfg,
 		kdzsRepo:           kdzsRepo,
 		returnExchangeRepo: returnExchangeRepo,
 		notificationRepo:   notificationRepo,
+		stockAlertRepo:     stockAlertRepo,
 		services:           make(map[uint64]*SyncService),
 	}
 }
@@ -53,7 +56,7 @@ func (m *Manager) ForTenant(tenantID uint64) (*SyncService, error) {
 	if svc, ok := m.services[tenantID]; ok {
 		return svc, nil
 	}
-	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo, m.returnExchangeRepo, m.notificationRepo)
+	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo, m.returnExchangeRepo, m.notificationRepo, m.stockAlertRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -77,6 +80,7 @@ func (m *Manager) ListTenantIDs() []uint64 {
 		m.kdzsRepo.ListTenantIDs,
 		m.returnExchangeRepo.ListTenantIDs,
 		m.notificationRepo.ListTenantIDs,
+		m.stockAlertRepo.ListTenantIDs,
 	} {
 		if ids, err := source(); err == nil {
 			for _, id := range ids {
@@ -133,6 +137,58 @@ func (m *Manager) NotificationPollInterval() time.Duration {
 			continue
 		}
 		iv := svc.NotificationPollInterval()
+		if !found || iv < min {
+			min = iv
+			found = true
+		}
+	}
+	return min
+}
+
+func (m *Manager) StockAlertEnabled() bool {
+	for _, tid := range m.ListTenantIDs() {
+		svc, err := m.ForTenant(tid)
+		if err != nil {
+			continue
+		}
+		if svc.StockAlertEnabled() {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Manager) RunStockAlertPollForAll(ctx context.Context) (sent, skipped int, lastErr error) {
+	for _, tid := range m.ListTenantIDs() {
+		svc, err := m.ForTenant(tid)
+		if err != nil || !svc.StockAlertEnabled() {
+			continue
+		}
+		result, err := svc.RunStockAlertPoll(ctx)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if result != nil {
+			sent += result.Sent
+			skipped += result.Skipped
+		}
+	}
+	return sent, skipped, lastErr
+}
+
+func (m *Manager) StockAlertPollInterval() time.Duration {
+	min := 60 * time.Minute
+	found := false
+	for _, tid := range m.ListTenantIDs() {
+		svc, err := m.ForTenant(tid)
+		if err != nil {
+			continue
+		}
+		if !svc.StockAlertEnabled() {
+			continue
+		}
+		iv := svc.StockAlertPollInterval()
 		if !found || iv < min {
 			min = iv
 			found = true

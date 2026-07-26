@@ -17,12 +17,24 @@ const loading = reactive({ products: false, sync: false })
 const products = ref<Product[]>([])
 const total = ref(0)
 const syncProgress = ref<ProductSyncProgress | null>(null)
+const showMoreFilters = ref(false)
 let progressTimer: ReturnType<typeof setInterval> | null = null
+let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let loadSeq = 0
 
 const filters = reactive({
   platform: 'FXG',
   shopId: '',
+  type: '',
   title: '',
+  shortTitle: '',
+  itemIds: '',
+  outerId: '',
+  productNumLike: '',
+  spuPropertiesName: '',
+  skuIds: '',
+  skuOuterId: '',
+  skuShortTitle: '',
   pageNo: 1,
   pageSize: 20,
 })
@@ -31,6 +43,12 @@ const platformOptions = [
   { label: '抖店', value: 'FXG' },
   { label: '淘宝', value: 'TB' },
   { label: '小红书', value: 'XHS' },
+]
+
+const typeOptions = [
+  { label: '全部状态', value: '' },
+  { label: '上架', value: 'onsale' },
+  { label: '下架', value: 'instock' },
 ]
 
 const shopOptions = computed(() =>
@@ -56,6 +74,22 @@ const progressText = computed(() => {
   return '正在同步商品，请耐心等待…'
 })
 
+const filterSummaryTags = computed(() => {
+  const tags: string[] = []
+  const typeLabel = typeOptions.find((o) => o.value === filters.type)?.label
+  if (filters.type && typeLabel) tags.push(`状态: ${typeLabel}`)
+  if (filters.title) tags.push(`标题: ${filters.title}`)
+  if (filters.itemIds) tags.push(`商品ID: ${filters.itemIds}`)
+  if (filters.outerId) tags.push(`商家编码: ${filters.outerId}`)
+  if (filters.shortTitle) tags.push(`简称: ${filters.shortTitle}`)
+  if (filters.productNumLike) tags.push(`代发货号: ${filters.productNumLike}`)
+  if (filters.spuPropertiesName) tags.push(`规格: ${filters.spuPropertiesName}`)
+  if (filters.skuIds) tags.push(`SKUID: ${filters.skuIds}`)
+  if (filters.skuOuterId) tags.push(`规格编码: ${filters.skuOuterId}`)
+  if (filters.skuShortTitle) tags.push(`规格简称: ${filters.skuShortTitle}`)
+  return tags
+})
+
 function platformLabel(code: string) {
   return platformOptions.find((o) => o.value === code)?.label || code
 }
@@ -69,21 +103,35 @@ function approveTagType(status?: string) {
 }
 
 async function loadProducts() {
+  const seq = ++loadSeq
   loading.products = true
   try {
     const data = await listProducts({
       platform: filters.platform || undefined,
       shopId: filters.shopId || undefined,
+      type: filters.type || undefined,
       title: filters.title || undefined,
+      shortTitle: filters.shortTitle || undefined,
+      itemIds: filters.itemIds || undefined,
+      outerId: filters.outerId || undefined,
+      productNumLike: filters.productNumLike || undefined,
+      spuPropertiesName: filters.spuPropertiesName || undefined,
+      skuIds: filters.skuIds || undefined,
+      skuOuterId: filters.skuOuterId || undefined,
+      skuShortTitle: filters.skuShortTitle || undefined,
       pageNo: filters.pageNo,
       pageSize: filters.pageSize,
     })
+    if (seq !== loadSeq) return
     products.value = data.items || []
     total.value = data.total || 0
   } catch (e: any) {
+    if (seq !== loadSeq) return
     ElMessage.error(e?.response?.data?.error || e.message || '加载商品失败')
   } finally {
-    loading.products = false
+    if (seq === loadSeq) {
+      loading.products = false
+    }
   }
 }
 
@@ -142,11 +190,31 @@ async function handleSync() {
 
 function onFilterChange() {
   filters.pageNo = 1
-  void loadProducts()
+  if (filterDebounceTimer) {
+    clearTimeout(filterDebounceTimer)
+  }
+  filterDebounceTimer = setTimeout(() => {
+    filterDebounceTimer = null
+    void loadProducts()
+  }, 400)
 }
 
 function onPlatformChange() {
   filters.shopId = ''
+  onFilterChange()
+}
+
+function resetFilters() {
+  filters.type = ''
+  filters.title = ''
+  filters.shortTitle = ''
+  filters.itemIds = ''
+  filters.outerId = ''
+  filters.productNumLike = ''
+  filters.spuPropertiesName = ''
+  filters.skuIds = ''
+  filters.skuOuterId = ''
+  filters.skuShortTitle = ''
   onFilterChange()
 }
 
@@ -176,6 +244,10 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopProgressPoll()
+  if (filterDebounceTimer) {
+    clearTimeout(filterDebounceTimer)
+    filterDebounceTimer = null
+  }
 })
 </script>
 
@@ -186,6 +258,24 @@ onBeforeUnmount(() => {
         <div class="row-between">
           <div class="card-title">商品列表 <span class="count">({{ total }})</span></div>
           <div class="actions">
+            <el-button type="warning" :loading="loading.sync" @click="handleSync">同步商品</el-button>
+            <el-button type="primary" :loading="loading.products" @click="refreshPage">刷新</el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="filter-panel">
+        <div class="filter-row">
+          <span class="filter-label">商品状态</span>
+          <el-radio-group v-model="filters.type" @change="onFilterChange">
+            <el-radio-button v-for="opt in typeOptions" :key="opt.value || 'all'" :label="opt.value">
+              {{ opt.label }}
+            </el-radio-button>
+          </el-radio-group>
+        </div>
+        <div class="filter-row">
+          <span class="filter-label">常用筛选</span>
+          <div class="filters">
             <el-select v-model="filters.platform" style="width: 120px" @change="onPlatformChange">
               <el-option v-for="opt in platformOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
             </el-select>
@@ -194,7 +284,7 @@ onBeforeUnmount(() => {
               clearable
               filterable
               placeholder="全部店铺"
-              style="width: 200px"
+              style="width: 180px"
               @change="onFilterChange"
             >
               <el-option
@@ -207,16 +297,88 @@ onBeforeUnmount(() => {
             <el-input
               v-model="filters.title"
               clearable
-              placeholder="商品标题"
-              style="width: 180px"
+              placeholder="商品名称"
+              style="width: 160px"
               @keyup.enter="onFilterChange"
               @clear="onFilterChange"
             />
-            <el-button type="warning" :loading="loading.sync" @click="handleSync">同步商品</el-button>
-            <el-button type="primary" :loading="loading.products" @click="refreshPage">刷新</el-button>
+            <el-input
+              v-model="filters.itemIds"
+              clearable
+              placeholder="商品ID"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+              @clear="onFilterChange"
+            />
+            <el-input
+              v-model="filters.outerId"
+              clearable
+              placeholder="商家编码"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+              @clear="onFilterChange"
+            />
+            <el-button type="primary" :loading="loading.products" @click="onFilterChange">查询</el-button>
+            <el-button @click="resetFilters">重置</el-button>
+            <el-button link type="primary" @click="showMoreFilters = !showMoreFilters">
+              {{ showMoreFilters ? '收起' : '更多筛选' }}
+            </el-button>
           </div>
         </div>
-      </template>
+        <div v-if="showMoreFilters" class="filter-row">
+          <span class="filter-label">更多条件</span>
+          <div class="filters">
+            <el-input
+              v-model="filters.shortTitle"
+              clearable
+              placeholder="商品简称"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+            <el-input
+              v-model="filters.productNumLike"
+              clearable
+              placeholder="代发货号"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+            <el-input
+              v-model="filters.spuPropertiesName"
+              clearable
+              placeholder="规格名称"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+            <el-input
+              v-model="filters.skuIds"
+              clearable
+              placeholder="SKUID"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+            <el-input
+              v-model="filters.skuOuterId"
+              clearable
+              placeholder="规格编码"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+            <el-input
+              v-model="filters.skuShortTitle"
+              clearable
+              placeholder="规格简称"
+              style="width: 140px"
+              @keyup.enter="onFilterChange"
+            />
+          </div>
+        </div>
+        <div v-if="filterSummaryTags.length" class="filter-row">
+          <span class="filter-label">当前筛选</span>
+          <div class="filter-tags">
+            <el-tag v-for="tag in filterSummaryTags" :key="tag" type="info" effect="plain">{{ tag }}</el-tag>
+          </div>
+        </div>
+      </div>
 
       <el-alert
         v-if="syncing"
@@ -239,9 +401,23 @@ onBeforeUnmount(() => {
           <template #default="{ row }">
             <div v-if="row.skus?.length" class="sku-expand">
               <el-table :data="row.skus" size="small" border>
-                <el-table-column prop="propertiesName" label="规格" min-width="160" />
-                <el-table-column prop="skuId" label="SKU ID" min-width="140" />
-                <el-table-column prop="outerId" label="商家编码" min-width="120" />
+                <el-table-column label="图片" width="72">
+                  <template #default="{ row: sku }">
+                    <el-image
+                      v-if="sku.picUrl || row.picUrl"
+                      :src="sku.picUrl || row.picUrl"
+                      fit="cover"
+                      class="sku-thumb"
+                      referrerpolicy="no-referrer"
+                      :preview-src-list="[sku.picUrl || row.picUrl]"
+                      preview-teleported
+                    />
+                    <span v-else class="muted">-</span>
+                  </template>
+                </el-table-column>
+                <el-table-column prop="propertiesName" label="规格" min-width="160" show-overflow-tooltip />
+                <el-table-column prop="skuId" label="SKU ID" min-width="140" show-overflow-tooltip />
+                <el-table-column prop="outerId" label="商家编码" min-width="120" show-overflow-tooltip />
                 <el-table-column prop="price" label="价格" width="90" />
                 <el-table-column prop="quantity" label="库存" width="80" />
                 <el-table-column prop="status" label="状态" width="90" />
@@ -256,7 +432,8 @@ onBeforeUnmount(() => {
               v-if="row.picUrl"
               :src="row.picUrl"
               fit="cover"
-              style="width: 48px; height: 48px; border-radius: 4px"
+              class="sku-thumb"
+              referrerpolicy="no-referrer"
               :preview-src-list="[row.picUrl]"
               preview-teleported
             />
@@ -304,6 +481,42 @@ onBeforeUnmount(() => {
   align-items: center;
   flex-wrap: wrap;
 }
+.filter-panel {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+.filter-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+.filter-label {
+  width: 72px;
+  flex-shrink: 0;
+  line-height: 32px;
+  color: #606266;
+  font-size: 13px;
+}
+.filters {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  flex: 1;
+}
+.filter-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  min-height: 32px;
+}
 .hint {
   margin-bottom: 16px;
 }
@@ -317,5 +530,13 @@ onBeforeUnmount(() => {
 }
 .muted {
   color: #909399;
+}
+.sku-thumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+}
+.sku-thumb :deep(img) {
+  referrerpolicy: no-referrer;
 }
 </style>

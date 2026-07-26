@@ -3,12 +3,22 @@ package kdzs
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const ResultRateLimit = 811
+
+// ErrItemListRateLimit is returned when KDZS rejects /item/v2/list with result 811.
+var ErrItemListRateLimit = errors.New("商品列表查询过于频繁，请稍后再试")
+
+const (
+	itemListMinInterval = 800 * time.Millisecond
+	itemListMaxRetries  = 5
+)
 
 type ShopItemSku struct {
 	SkuID          string `json:"skuId"`
@@ -17,6 +27,7 @@ type ShopItemSku struct {
 	Quantity       int    `json:"quantity"`
 	OuterID        string `json:"outerId"`
 	PicURL         string `json:"picUrl"`
+	ScmPicURL      string `json:"scmPicUrl"`
 	ShortTitle     string `json:"shortTitle"`
 	Status         string `json:"status"`
 	ProductNum     string `json:"productNum"`
@@ -40,12 +51,19 @@ type ShopItem struct {
 }
 
 type ItemListQuery struct {
-	PageNo     int
-	PageSize   int
-	ShopIDList []string
-	Title      string
-	ItemIDs    string
-	OuterID    string
+	PageNo             int
+	PageSize           int
+	ShopIDList         []string
+	Type               string // onsale / instock
+	Title              string
+	ShortTitle         string
+	ItemIDs            string // numIids
+	OuterID            string
+	ProductNumLike     string
+	SpuPropertiesName  string
+	SkuIDs             string
+	SkuOuterID         string
+	SkuShortTitle      string
 }
 
 type ItemListResult struct {
@@ -72,12 +90,19 @@ type itemAPIResponse struct {
 }
 
 type itemListRequest struct {
-	PageNo     int      `json:"pageNo"`
-	PageSize   int      `json:"pageSize"`
-	ShopIDList []string `json:"shopIdList"`
-	Title      string   `json:"title"`
-	ItemIDs    string   `json:"itemIds"`
-	OuterID    string   `json:"outerId"`
+	PageNo            int      `json:"pageNo"`
+	PageSize          int      `json:"pageSize"`
+	ShopIDList        []string `json:"shopIdList"`
+	Type              string   `json:"type"`
+	Title             string   `json:"title"`
+	ShortTitle        string   `json:"shortTitle"`
+	NumIids           string   `json:"numIids"`
+	OuterID           string   `json:"outerId"`
+	ProductNumLike    string   `json:"productNumLike"`
+	SpuPropertiesName string   `json:"spuPropertiesName"`
+	SkuIDs            string   `json:"skuIds"`
+	SkuOuterID        string   `json:"skuOuterId"`
+	SkuShortTitle     string   `json:"skuShortTitle"`
 }
 
 type syncItemsRequest struct {
@@ -116,7 +141,7 @@ func checkItemListResult(resp *itemAPIResponse) (*ItemListResult, error) {
 		}
 		return &data, nil
 	case ResultRateLimit:
-		return nil, fmt.Errorf("商品列表查询过于频繁，请稍后再试")
+		return nil, ErrItemListRateLimit
 	default:
 		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, fmt.Sprintf("api error result=%d", code))
 		return nil, fmt.Errorf("%s", msg)
@@ -192,18 +217,59 @@ func (s *Session) ListShopItems(ctx context.Context, platform string, q ItemList
 		pageSize = 20
 	}
 	body := itemListRequest{
-		PageNo:     pageNo,
-		PageSize:   pageSize,
-		ShopIDList: q.ShopIDList,
-		Title:      q.Title,
-		ItemIDs:    q.ItemIDs,
-		OuterID:    q.OuterID,
+		PageNo:            pageNo,
+		PageSize:          pageSize,
+		ShopIDList:        q.ShopIDList,
+		Type:              q.Type,
+		Title:             q.Title,
+		ShortTitle:        q.ShortTitle,
+		NumIids:           q.ItemIDs,
+		OuterID:           q.OuterID,
+		ProductNumLike:    q.ProductNumLike,
+		SpuPropertiesName: q.SpuPropertiesName,
+		SkuIDs:            q.SkuIDs,
+		SkuOuterID:        q.SkuOuterID,
+		SkuShortTitle:     q.SkuShortTitle,
 	}
-	var resp itemAPIResponse
-	if err := s.client.PostPlatform(ctx, ps, "/item/v2/list", body, &resp); err != nil {
-		return nil, err
+
+	// Serialize item list calls per session to avoid KDZS 811 rate limits.
+	s.itemListMu.Lock()
+	defer s.itemListMu.Unlock()
+
+	var lastErr error
+	for attempt := 0; attempt < itemListMaxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(1<<attempt) * time.Second // 2s, 4s, 8s, 16s
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		} else if !s.itemListLastCall.IsZero() {
+			wait := itemListMinInterval - time.Since(s.itemListLastCall)
+			if wait > 0 {
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(wait):
+				}
+			}
+		}
+		s.itemListLastCall = time.Now()
+		var resp itemAPIResponse
+		if err := s.client.PostPlatform(ctx, ps, "/item/v2/list", body, &resp); err != nil {
+			return nil, err
+		}
+		result, err := checkItemListResult(&resp)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if !errors.Is(err, ErrItemListRateLimit) {
+			return nil, err
+		}
 	}
-	return checkItemListResult(&resp)
+	return nil, lastErr
 }
 
 func (s *Session) SyncShopItems(ctx context.Context, platform string, shopIDs []string) error {

@@ -180,9 +180,16 @@ export interface ProductSyncProgress {
 export async function listProducts(params: {
   platform?: string
   shopId?: string
+  type?: string
   title?: string
+  shortTitle?: string
   itemIds?: string
   outerId?: string
+  productNumLike?: string
+  spuPropertiesName?: string
+  skuIds?: string
+  skuOuterId?: string
+  skuShortTitle?: string
   pageNo?: number
   pageSize?: number
 }) {
@@ -538,4 +545,81 @@ export async function runNotification() {
 
 export async function resetNotificationState() {
   return unwrap(await http.post<{ cleared: number; view: NotificationView }>('/notifications/reset-state'))
+}
+
+export interface StockAlertConfig {
+  enabled: boolean
+  webhookUrl: string
+  secret?: string
+  secretSet?: boolean
+  platform: string
+  shopIds: string[]
+  stockThreshold: number
+  checkLevel: 'sku' | 'spu' | 'both'
+  onlyOnsale: boolean
+  pollIntervalMinutes: number
+}
+
+export interface StockAlertState {
+  lastRunAt?: string
+  lastRunOk?: boolean
+  lastError?: string
+  lastSentCount?: number
+  lastAlertCount?: number
+}
+
+export interface StockAlertView {
+  config: StockAlertConfig
+  state: StockAlertState
+  shops: Shop[]
+}
+
+export interface StockAlertHit {
+  itemId: string
+  title: string
+  shortTitle?: string
+  outerId?: string
+  picUrl?: string
+  platform: string
+  platformName: string
+  shopId: string
+  shopName: string
+  approveStatus?: string
+  approveStatusLabel?: string
+  skuId?: string
+  propertiesName?: string
+  skuOuterId?: string
+  quantity: number
+  level: 'sku' | 'spu'
+}
+
+export interface StockAlertScanResult {
+  threshold: number
+  total: number
+  scanned: number
+  items: StockAlertHit[]
+}
+
+export async function getStockAlert() {
+  return unwrap(await http.get<StockAlertView>('/product-stock-alerts'))
+}
+
+export async function saveStockAlert(body: StockAlertConfig) {
+  return unwrap(await http.put<StockAlertView>('/product-stock-alerts', body))
+}
+
+export async function scanStockAlert() {
+  return unwrap(await http.post<StockAlertScanResult>('/product-stock-alerts/scan'))
+}
+
+export async function testStockAlert(text?: string) {
+  return unwrap(await http.post<{ ok: boolean }>('/product-stock-alerts/test', { text }))
+}
+
+export async function runStockAlert() {
+  return unwrap(await http.post<{ sent: number; skipped: number; alerted: number; scanned: number }>('/product-stock-alerts/run'))
+}
+
+export async function resetStockAlertState() {
+  return unwrap(await http.post<{ cleared: number; view: StockAlertView }>('/product-stock-alerts/reset-state'))
 }

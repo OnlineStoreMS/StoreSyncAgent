@@ -21,6 +21,9 @@ type Session struct {
 	accountName     string
 	accountRole     string
 	platform        map[string]*PlatformSession
+
+	itemListMu       sync.Mutex
+	itemListLastCall time.Time
 }
 
 type PlatformSession struct {

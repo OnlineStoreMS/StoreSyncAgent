@@ -29,5 +29,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.TenantKdzsSetting{},
 		&model.ReturnExchange{},
 		&model.TenantNotification{},
+		&model.TenantStockAlert{},
 	)
 }

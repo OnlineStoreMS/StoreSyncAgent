@@ -28,6 +28,7 @@ type SyncService struct {
 	activeAccountID     string
 	returnExchangeRepo  *repo.ReturnExchangeRepo
 	notificationRepo    *repo.NotificationRepo
+	stockAlertRepo      *repo.StockAlertRepo
 	feishuClient        *feishu.Client
 }
 
@@ -37,6 +38,7 @@ func NewSyncService(
 	kdzsRepo *repo.KdzsRepo,
 	returnExchangeRepo *repo.ReturnExchangeRepo,
 	notificationRepo *repo.NotificationRepo,
+	stockAlertRepo *repo.StockAlertRepo,
 ) (*SyncService, error) {
 	globalBaseURL := baseCfg.Kdzs.BaseURL
 	if globalBaseURL == "" {
@@ -52,6 +54,7 @@ func NewSyncService(
 		kdzsRepo:           kdzsRepo,
 		returnExchangeRepo: returnExchangeRepo,
 		notificationRepo:   notificationRepo,
+		stockAlertRepo:     stockAlertRepo,
 		feishuClient:       feishu.NewClient(),
 	}
 	if err := svc.loadSettings(); err != nil {
@@ -159,13 +162,20 @@ func (s *SyncService) ListShops(ctx context.Context) ([]ShopView, error) {
 }
 
 type ItemQuery struct {
-	Platform string `form:"platform"`
-	ShopID   string `form:"shopId"`
-	Title    string `form:"title"`
-	ItemIDs  string `form:"itemIds"`
-	OuterID  string `form:"outerId"`
-	PageNo   int    `form:"pageNo"`
-	PageSize int    `form:"pageSize"`
+	Platform          string `form:"platform"`
+	ShopID            string `form:"shopId"`
+	Type              string `form:"type"` // onsale / instock
+	Title             string `form:"title"`
+	ShortTitle        string `form:"shortTitle"`
+	ItemIDs           string `form:"itemIds"`
+	OuterID           string `form:"outerId"`
+	ProductNumLike    string `form:"productNumLike"`
+	SpuPropertiesName string `form:"spuPropertiesName"`
+	SkuIDs            string `form:"skuIds"`
+	SkuOuterID        string `form:"skuOuterId"`
+	SkuShortTitle     string `form:"skuShortTitle"`
+	PageNo            int    `form:"pageNo"`
+	PageSize          int    `form:"pageSize"`
 }
 
 type ItemSkuView struct {
@@ -207,6 +217,16 @@ type ItemListView struct {
 	Platform string     `json:"platform,omitempty"`
 }
 
+func resolveSkuPicURL(sku kdzs.ShopItemSku, itemPic string) string {
+	for _, u := range []string{sku.PicURL, sku.ScmPicURL, itemPic} {
+		u = strings.TrimSpace(u)
+		if u != "" && u != "null" {
+			return u
+		}
+	}
+	return ""
+}
+
 func toItemView(item kdzs.ShopItem) ItemView {
 	skus := make([]ItemSkuView, 0, len(item.Skus))
 	for _, sku := range item.Skus {
@@ -216,7 +236,7 @@ func toItemView(item kdzs.ShopItem) ItemView {
 			Price:          sku.Price,
 			Quantity:       sku.Quantity,
 			OuterID:        sku.OuterID,
-			PicURL:         sku.PicURL,
+			PicURL:         resolveSkuPicURL(sku, item.PicURL),
 			ShortTitle:     sku.ShortTitle,
 			Status:         sku.Status,
 			ProductNum:     sku.ProductNum,
@@ -328,12 +348,19 @@ func (s *SyncService) ListItems(ctx context.Context, q ItemQuery) (*ItemListView
 			shopIDList = ids
 		}
 		result, err := s.session.ListShopItems(ctx, platform, kdzs.ItemListQuery{
-			PageNo:     pageNo,
-			PageSize:   pageSize,
-			ShopIDList: shopIDList,
-			Title:      q.Title,
-			ItemIDs:    q.ItemIDs,
-			OuterID:    q.OuterID,
+			PageNo:            pageNo,
+			PageSize:          pageSize,
+			ShopIDList:        shopIDList,
+			Type:              q.Type,
+			Title:             q.Title,
+			ShortTitle:        q.ShortTitle,
+			ItemIDs:           q.ItemIDs,
+			OuterID:           q.OuterID,
+			ProductNumLike:    q.ProductNumLike,
+			SpuPropertiesName: q.SpuPropertiesName,
+			SkuIDs:            q.SkuIDs,
+			SkuOuterID:        q.SkuOuterID,
+			SkuShortTitle:     q.SkuShortTitle,
 		})
 		if err != nil {
 			return nil, err
@@ -363,12 +390,19 @@ func (s *SyncService) ListItems(ctx context.Context, q ItemQuery) (*ItemListView
 		shopIDList := platformShops[platform]
 		for page := 1; ; page++ {
 			result, err := s.session.ListShopItems(ctx, platform, kdzs.ItemListQuery{
-				PageNo:     page,
-				PageSize:   50,
-				ShopIDList: shopIDList,
-				Title:      q.Title,
-				ItemIDs:    q.ItemIDs,
-				OuterID:    q.OuterID,
+				PageNo:            page,
+				PageSize:          50,
+				ShopIDList:        shopIDList,
+				Type:              q.Type,
+				Title:             q.Title,
+				ShortTitle:        q.ShortTitle,
+				ItemIDs:           q.ItemIDs,
+				OuterID:           q.OuterID,
+				ProductNumLike:    q.ProductNumLike,
+				SpuPropertiesName: q.SpuPropertiesName,
+				SkuIDs:            q.SkuIDs,
+				SkuOuterID:        q.SkuOuterID,
+				SkuShortTitle:     q.SkuShortTitle,
 			})
 			if err != nil {
 				return nil, fmt.Errorf("%s: %w", platform, err)

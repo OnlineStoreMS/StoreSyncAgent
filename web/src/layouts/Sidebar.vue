@@ -13,9 +13,13 @@ const menuItems = [
   { path: '/dashboard', title: '工作台', icon: HomeFilled },
   { path: '/kdzs-accounts', title: '账号管理', icon: User },
   { path: '/shops', title: '店铺管理', icon: Shop },
-  { path: '/products', title: '商品管理', icon: Goods },
   { path: '/factories', title: '厂家管理', icon: OfficeBuilding },
   { path: '/orders', title: '订单列表', icon: List },
+]
+
+const productItems = [
+  { path: '/products', title: '商品列表' },
+  { path: '/products/stock-alerts', title: '库存预警' },
 ]
 
 const afterSaleItems = [
@@ -50,6 +54,20 @@ function navigate(path: string) {
         <el-icon><component :is="item.icon" /></el-icon>
         <span>{{ item.title }}</span>
       </el-menu-item>
+      <el-sub-menu index="products">
+        <template #title>
+          <el-icon><Goods /></el-icon>
+          <span>商品管理</span>
+        </template>
+        <el-menu-item
+          v-for="item in productItems"
+          :key="item.path"
+          :index="item.path"
+          @click="navigate(item.path)"
+        >
+          {{ item.title }}
+        </el-menu-item>
+      </el-sub-menu>
       <el-sub-menu index="aftersale">
         <template #title>
           <el-icon><Service /></el-icon>

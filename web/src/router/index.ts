@@ -44,7 +44,13 @@ const router = createRouter({
           path: 'products',
           name: 'ProductList',
           component: () => import('../views/product/ProductList.vue'),
-          meta: { title: '商品管理' },
+          meta: { title: '商品列表' },
+        },
+        {
+          path: 'products/stock-alerts',
+          name: 'ProductStockAlert',
+          component: () => import('../views/product/ProductStockAlert.vue'),
+          meta: { title: '库存预警' },
         },
         {
           path: 'factories',
