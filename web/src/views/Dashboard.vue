@@ -207,10 +207,8 @@ onMounted(async () => {
             <el-icon :size="28" color="#e6a23c"><List /></el-icon>
             <div>
               <div class="stat-label">待推单</div>
-              <div class="stat-value">{{ kdzsStore.stats?.waitingPushTotal ?? '—' }}</div>
-              <div class="stat-sub muted" v-if="kdzsStore.stats?.waitingPushByPlatform?.FXG">
-                抖店 {{ kdzsStore.stats.waitingPushByPlatform.FXG }}
-              </div>
+              <div class="stat-value">{{ (kdzsStore.stats?.tabWaitAudit || kdzsStore.stats?.waitingPushTotal) ?? '—' }}</div>
+              <div class="stat-sub muted">快递助手列表统计</div>
             </div>
           </div>
         </el-card>
@@ -221,8 +219,8 @@ onMounted(async () => {
             <el-icon :size="28" color="#f56c6c"><List /></el-icon>
             <div>
               <div class="stat-label">待发货</div>
-              <div class="stat-value">{{ kdzsStore.stats?.waitingSendTotal ?? '—' }}</div>
-              <div class="stat-sub muted">快递助手首页统计</div>
+              <div class="stat-value">{{ (kdzsStore.stats?.tabWaitSend || kdzsStore.stats?.waitingSendTotal) ?? '—' }}</div>
+              <div class="stat-sub muted">快递助手列表统计</div>
             </div>
           </div>
         </el-card>

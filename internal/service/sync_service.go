@@ -559,40 +559,111 @@ func (s *SyncService) ListOrders(ctx context.Context, q OrderQuery) (*OrderListV
 		return nil, err
 	}
 
-	stats, _ := s.client.GetMainPageStats(ctx)
-	if stats != nil {
-		result.Stats = &OrderStatsView{
-			WaitingPushTotal:      stats.WaitingPushOrderNum,
-			WaitingSendTotal:      stats.WaitingSendOrderNum,
-			WaitingPushByPlatform: stats.WaitingPushByPlatform,
-		}
-		if q.Platform != "" {
-			if c, err := s.session.GetWaitSendCount(ctx, q.Platform, nil, nil, shopIDs(q.ShopID)); err == nil && c != nil {
-				result.Stats.TabWaitAudit = c.WaitAudit
-				result.Stats.TabWaitSend = c.WaitSend
-			}
-		} else if shops, err := s.client.ListEcommerceShops(ctx); err == nil {
-			// 全平台：汇总各平台待推/待发数量
-			for i, p := range uniquePlatforms(shops) {
-				if i > 0 {
-					select {
-					case <-ctx.Done():
-					case <-time.After(800 * time.Millisecond):
-					}
-				}
-				if c, err := s.session.GetWaitSendCount(ctx, p, nil, nil, nil); err == nil && c != nil {
-					result.Stats.TabWaitAudit += c.WaitAudit
-					result.Stats.TabWaitSend += c.WaitSend
-				}
-			}
-		}
+	result.Stats = &OrderStatsView{}
+	if stats, _ := s.client.GetMainPageStats(ctx); stats != nil {
+		// 首页接口在代发账号上常返回全 0，仅作分平台参考；真实数量下面用列表总数校准
+		result.Stats.WaitingPushTotal = stats.WaitingPushOrderNum
+		result.Stats.WaitingSendTotal = stats.WaitingSendOrderNum
+		result.Stats.WaitingPushByPlatform = stats.WaitingPushByPlatform
 	}
+	s.fillWaitStats(ctx, q, result)
 
 	if result.Total == 0 && result.Stats != nil && result.Stats.WaitingPushTotal > 0 && q.TradeStatus == "wait_audit" {
-		result.Hint = "快递助手首页显示有待推单，但列表为空。请检查抖店店铺授权是否有效（店铺列表中「授权状态」），并在快递助手网页端「推送订单-待推单」确认是否可见。"
+		result.Hint = "统计有待推单，但当前筛选下列表为空。请检查店铺授权，或放宽时间范围后重试。"
 	}
 	result.Filters = buildOrderFilters(q)
 	return result, nil
+}
+
+// fillWaitStats 用 queryWaitSendCount / 列表 total 校准待推、待发数量。
+// 快递助手 mainPageData 对代发账号经常全 0，不能单独作为卡片数据源。
+func (s *SyncService) fillWaitStats(ctx context.Context, q OrderQuery, result *OrderListView) {
+	if result == nil {
+		return
+	}
+	if result.Stats == nil {
+		result.Stats = &OrderStatsView{}
+	}
+	stats := result.Stats
+
+	platforms := []string{}
+	if p := strings.TrimSpace(q.Platform); p != "" {
+		platforms = []string{p}
+	} else if shops, err := s.client.ListEcommerceShops(ctx); err == nil {
+		platforms = uniquePlatforms(shops)
+	}
+	if len(platforms) == 0 {
+		platforms = []string{"FXG"}
+	}
+
+	audit, send := 0, 0
+	countOK := false
+	for i, p := range platforms {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(800 * time.Millisecond):
+			}
+		}
+		c, err := s.session.GetWaitSendCount(ctx, p, nil, nil, shopIDs(q.ShopID))
+		if err != nil || c == nil {
+			continue
+		}
+		countOK = true
+		audit += c.WaitAudit
+		send += c.WaitSend
+	}
+	if countOK {
+		stats.TabWaitAudit = audit
+		stats.TabWaitSend = send
+		stats.WaitingPushTotal = audit
+		stats.WaitingSendTotal = send
+		return
+	}
+
+	// count 接口异常时：复用当前列表 total，并补查另一状态
+	status := strings.ToLower(strings.TrimSpace(q.TradeStatus))
+	switch status {
+	case "wait_audit":
+		stats.TabWaitAudit = result.Total
+		stats.WaitingPushTotal = result.Total
+	case "wait_send":
+		stats.TabWaitSend = result.Total
+		stats.WaitingSendTotal = result.Total
+	}
+
+	needAudit := status != "wait_audit"
+	needSend := status != "wait_send"
+	if !needAudit && !needSend {
+		return
+	}
+
+	base := q
+	if base.Platform == "" {
+		base.Platform = platforms[0]
+	}
+	base.PageNo = 1
+	base.PageSize = 1
+	if needAudit {
+		base.TradeStatus = "wait_audit"
+		if r, err := s.session.QueryTrades(ctx, s.toTradeQuery(base)); err == nil && r != nil {
+			stats.TabWaitAudit = r.Total
+			stats.WaitingPushTotal = r.Total
+		}
+	}
+	if needSend {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(1200 * time.Millisecond):
+		}
+		base.TradeStatus = "wait_send"
+		if r, err := s.session.QueryTrades(ctx, s.toTradeQuery(base)); err == nil && r != nil {
+			stats.TabWaitSend = r.Total
+			stats.WaitingSendTotal = r.Total
+		}
+	}
 }
 
 func buildOrderFilters(q OrderQuery) *OrderFiltersView {

@@ -61,7 +61,21 @@ type TradeListItem struct {
 	FactoryName     string         `json:"factoryName,omitempty"`
 	Decrypted       bool           `json:"decrypted,omitempty"`
 	FormattedReceiver string       `json:"formattedReceiver,omitempty"`
+	// 发货物流（来自详情 logisticsInfoList / consignTime）
+	ExpressCompany string           `json:"expressCompany,omitempty"`
+	ExpressCode    string           `json:"expressCode,omitempty"`
+	ExpressNo      string           `json:"expressNo,omitempty"`
+	ShippedAt      string           `json:"shippedAt,omitempty"` // 发货时间，优先 consignTime
+	Logistics      []TradeLogistics `json:"logistics,omitempty"`
 	DecryptMeta     *TradeDecryptMeta `json:"-"`
+}
+
+// TradeLogistics 快递助手包裹物流信息
+type TradeLogistics struct {
+	Company     string `json:"company,omitempty"`
+	CompanyName string `json:"companyName,omitempty"`
+	TrackingNo  string `json:"trackingNo,omitempty"`
+	ShipTime    string `json:"shipTime,omitempty"`
 }
 
 type TradeGoods struct {
@@ -457,6 +471,21 @@ func mergeTradeListItem(base, detail TradeListItem) TradeListItem {
 	if out.ShopName == "" {
 		out.ShopName = base.ShopName
 	}
+	if out.ExpressNo == "" {
+		out.ExpressNo = base.ExpressNo
+	}
+	if out.ExpressCompany == "" {
+		out.ExpressCompany = base.ExpressCompany
+	}
+	if out.ExpressCode == "" {
+		out.ExpressCode = base.ExpressCode
+	}
+	if out.ShippedAt == "" {
+		out.ShippedAt = base.ShippedAt
+	}
+	if len(out.Logistics) == 0 {
+		out.Logistics = base.Logistics
+	}
 	normalizeAgentType(&out, 0, 0)
 	return out
 }
@@ -666,6 +695,89 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 	userFactoryID := asString(trade["factoryUserId"], trade["factoryUserID"])
 	applyFactoryFields(item, explicitFactoryID, userFactoryID, daifa, pushType)
 	normalizeAgentType(item, daifa, pushType)
+	applyTradeLogistics(item, trade)
+}
+
+// applyTradeLogistics 从详情包提取快递公司/单号/发货时间。
+func applyTradeLogistics(item *TradeListItem, trade map[string]any) {
+	if item == nil || trade == nil {
+		return
+	}
+	if item.ShippedAt == "" {
+		item.ShippedAt = asString(trade["consignTime"], trade["sysShipTimeStr"], trade["sendTime"])
+	}
+	list, _ := trade["logisticsInfoList"].([]any)
+	if len(list) == 0 {
+		// 兼容偶发单层字段
+		no := asString(trade["trackingNo"], trade["ydNo"], trade["mailNo"], trade["sid"], trade["expressNo"])
+		if no != "" && item.ExpressNo == "" {
+			item.ExpressNo = no
+			item.ExpressCompany = asString(trade["companyName"], trade["logisticsCompanyName"], trade["kdName"], trade["expressName"])
+			item.ExpressCode = asString(trade["company"], trade["sidCode"], trade["kdCode"], trade["cpCode"])
+		}
+		return
+	}
+	out := make([]TradeLogistics, 0, len(list))
+	for _, raw := range list {
+		m, _ := raw.(map[string]any)
+		if m == nil {
+			continue
+		}
+		lg := TradeLogistics{
+			Company:     asString(m["company"], m["kdCode"], m["cpCode"], m["sidCode"]),
+			CompanyName: asString(m["companyName"], m["logisticsCompanyName"], m["kdName"], m["expressName"]),
+			TrackingNo:  asString(m["trackingNo"], m["ydNo"], m["mailNo"], m["sid"], m["expressNo"]),
+			ShipTime:    formatLogisticsShipTime(m["shipTime"]),
+		}
+		if lg.TrackingNo == "" && lg.CompanyName == "" && lg.Company == "" {
+			continue
+		}
+		out = append(out, lg)
+	}
+	if len(out) == 0 {
+		return
+	}
+	item.Logistics = out
+	primary := out[0]
+	if item.ExpressNo == "" {
+		item.ExpressNo = primary.TrackingNo
+	}
+	if item.ExpressCompany == "" {
+		item.ExpressCompany = firstNonEmpty(primary.CompanyName, primary.Company)
+	}
+	if item.ExpressCode == "" {
+		item.ExpressCode = primary.Company
+	}
+	if item.ShippedAt == "" {
+		item.ShippedAt = primary.ShipTime
+	}
+}
+
+func formatLogisticsShipTime(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(t)
+	case float64:
+		sec := int64(t)
+		if sec <= 0 {
+			return ""
+		}
+		// 毫秒时间戳
+		if sec > 1_000_000_000_000 {
+			sec = sec / 1000
+		}
+		return time.Unix(sec, 0).In(time.Local).Format("2006-01-02 15:04:05")
+	case json.Number:
+		f, err := t.Float64()
+		if err != nil {
+			return ""
+		}
+		return formatLogisticsShipTime(f)
+	default:
+		return asString(v)
+	}
 }
 
 // applyFactoryFields 仅在明确代发时采用 factoryUserId；裸 factoryUserId 常为商家自身 ID，不可当作厂家。

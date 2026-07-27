@@ -73,15 +73,15 @@ const filterSummaryTags = computed(() => {
 const statCards = computed(() => [
   {
     label: '待推单',
-    subLabel: '首页统计',
-    value: orderStats.value?.waitingPushTotal,
+    subLabel: '列表统计',
+    value: orderStats.value?.tabWaitAudit || orderStats.value?.waitingPushTotal,
     color: '#e6a23c',
     tradeStatus: 'wait_audit',
   },
   {
     label: '待发货',
-    subLabel: '首页统计',
-    value: orderStats.value?.waitingSendTotal,
+    subLabel: '列表统计',
+    value: orderStats.value?.tabWaitSend || orderStats.value?.waitingSendTotal,
     color: '#409eff',
     tradeStatus: 'wait_send',
   },
@@ -411,11 +411,12 @@ onMounted(async () => {
           </div>
           <div
             class="stat-sub muted"
-            v-if="card.tradeStatus === 'wait_audit' && orderStats.waitingPushByPlatform && Object.keys(orderStats.waitingPushByPlatform).length"
+            v-if="card.tradeStatus === 'wait_audit' && orderStats.waitingPushByPlatform && Object.values(orderStats.waitingPushByPlatform).some((n) => Number(n) > 0)"
           >
             <span
               v-for="(n, code) in orderStats.waitingPushByPlatform"
               :key="code"
+              v-show="Number(n) > 0"
               class="plat-stat"
             >{{ platformLabel(String(code)) }} {{ n }}</span>
           </div>
