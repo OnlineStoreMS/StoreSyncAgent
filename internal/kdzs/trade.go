@@ -486,6 +486,19 @@ func mergeTradeListItem(base, detail TradeListItem) TradeListItem {
 	if len(out.Logistics) == 0 {
 		out.Logistics = base.Logistics
 	}
+	// 详情可能缺备注字段，保留列表侧已有值
+	if out.BuyerMemo == "" {
+		out.BuyerMemo = base.BuyerMemo
+	}
+	if out.SellerMemo == "" {
+		out.SellerMemo = base.SellerMemo
+	}
+	if out.FenFaMemo == "" {
+		out.FenFaMemo = base.FenFaMemo
+	}
+	if out.PrinterMemo == "" {
+		out.PrinterMemo = base.PrinterMemo
+	}
 	normalizeAgentType(&out, 0, 0)
 	return out
 }
@@ -668,13 +681,14 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 		item.BuyerMemo = asString(trade["buyerMemo"], trade["buyerMessage"], trade["buyerMessageMemo"])
 	}
 	if item.SellerMemo == "" {
-		item.SellerMemo = asString(trade["sellerMemo"])
+		item.SellerMemo = asString(trade["sellerMemo"], trade["sysSellerMemo"])
 	}
 	if item.FenFaMemo == "" {
-		item.FenFaMemo = asString(trade["fenFaMemo"], trade["fenfaMemo"])
+		// 快递助手分发备注：详情多为 sysFenfaMemo，列表偶发 fenFaMemo
+		item.FenFaMemo = asString(trade["sysFenfaMemo"], trade["fenFaMemo"], trade["fenfaMemo"], trade["distributorRemark"])
 	}
 	if item.PrinterMemo == "" {
-		item.PrinterMemo = asString(trade["printerMemo"], trade["dadanMemo"])
+		item.PrinterMemo = asString(trade["printerMemo"], trade["dadanMemo"], trade["sysPrinterMemo"], trade["printMemo"])
 	}
 	if item.FactoryName == "" {
 		item.FactoryName = asString(trade["factoryName"], trade["factoryNick"], trade["pushFactoryName"])

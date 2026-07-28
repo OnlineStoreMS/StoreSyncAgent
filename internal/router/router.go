@@ -51,6 +51,7 @@ func Setup(h *handler.Handler, cfg *config.Config, webDist string) *gin.Engine {
 		adminGroup.POST("/orders/decrypt", h.DecryptOrders)
 		adminGroup.POST("/orders/agent-type", h.SetOrderAgentType)
 		adminGroup.POST("/orders/cancel-push", h.CancelOrderPush)
+		adminGroup.POST("/orders/update-remark", h.UpdateTradeRemark)
 		adminGroup.POST("/orders/ship-callback", h.ShipCallback)
 		adminGroup.GET("/refunds", h.ListRefunds)
 		adminGroup.GET("/refunds/stats", h.RefundStats)

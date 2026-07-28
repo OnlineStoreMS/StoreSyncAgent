@@ -1005,6 +1005,34 @@ func (s *SyncService) CancelOrderPush(ctx context.Context, req CancelOrderPushRe
 	})
 }
 
+// UpdateTradeRemarkRequest 写回卖家/打单备注到快递助手。
+type UpdateTradeRemarkRequest struct {
+	Platform    string   `json:"platform"`
+	TradeStatus string   `json:"tradeStatus"`
+	SysTids     []string `json:"sysTids"`
+	MemoType    string   `json:"memoType"` // sellerMemo | printerMemo | fenFaMemo
+	Remark      string   `json:"remark"`
+}
+
+func (s *SyncService) UpdateTradeRemark(ctx context.Context, req UpdateTradeRemarkRequest) error {
+	if err := s.ensureLogin(ctx); err != nil {
+		return err
+	}
+	if req.Platform == "" {
+		return fmt.Errorf("platform is required")
+	}
+	if len(req.SysTids) == 0 {
+		return fmt.Errorf("sysTids is required")
+	}
+	return s.session.UpdateTradeRemark(ctx, kdzs.UpdateTradeRemarkRequest{
+		Platform:    req.Platform,
+		TradeStatus: req.TradeStatus,
+		SysTids:     req.SysTids,
+		MemoType:    req.MemoType,
+		Remark:      req.Remark,
+	})
+}
+
 // ShipCallbackRequest 订单中心回传物流信息。
 type ShipCallbackRequest struct {
 	Platform       string `json:"platform"`

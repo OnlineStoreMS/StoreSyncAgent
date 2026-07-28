@@ -234,6 +234,24 @@ func (h *Handler) CancelOrderPush(c *gin.Context) {
 	response.OK(c, result)
 }
 
+func (h *Handler) UpdateTradeRemark(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req service.UpdateTradeRemarkRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := svc.UpdateTradeRemark(c.Request.Context(), req); err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, gin.H{"updated": true})
+}
+
 // ShipCallback 接收订单中心回传的物流单号，后续对接快递助手/平台发货接口。
 func (h *Handler) ShipCallback(c *gin.Context) {
 	svc, err := h.svc(c)
