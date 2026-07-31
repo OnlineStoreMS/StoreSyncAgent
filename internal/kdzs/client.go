@@ -147,6 +147,10 @@ func (c *Client) GetPlatform(ctx context.Context, ps *PlatformSession, path stri
 	return c.getPlatform(ctx, ps, path, out)
 }
 
+func (c *Client) PostPlatformForm(ctx context.Context, ps *PlatformSession, path string, form url.Values, out any) error {
+	return c.postPlatformForm(ctx, ps, path, form, out)
+}
+
 func (c *Client) postPlatformForm(ctx context.Context, ps *PlatformSession, path string, form url.Values, out any) error {
 	urlStr := "https://" + ps.Host + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, urlStr, strings.NewReader(form.Encode()))

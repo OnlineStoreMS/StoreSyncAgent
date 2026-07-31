@@ -1050,8 +1050,7 @@ type ShipCallbackResult struct {
 	Message  string `json:"message"`
 }
 
-// ShipCallback 接收 OrderCore 物流回传。
-// 当前先校验并落日志，后续对接快递助手/电商平台「上传运单号」接口完成真实发货。
+// ShipCallback 接收 OrderCore 物流回传，调用快递助手「手动填写单号」发货。
 func (s *SyncService) ShipCallback(ctx context.Context, req ShipCallbackRequest) (*ShipCallbackResult, error) {
 	if strings.TrimSpace(req.ExpressNo) == "" {
 		return nil, fmt.Errorf("expressNo is required")
@@ -1059,13 +1058,35 @@ func (s *SyncService) ShipCallback(ctx context.Context, req ShipCallbackRequest)
 	if strings.TrimSpace(req.PlatformTid) == "" && strings.TrimSpace(req.PlatformSysTid) == "" {
 		return nil, fmt.Errorf("platformTid or platformSysTid is required")
 	}
-	// TODO: 对接 KDZS / 平台发货 API（按 platform + tid 上传运单号）
-	_ = ctx
-	_ = s
-	return &ShipCallbackResult{
-		Accepted: true,
-		Message:  fmt.Sprintf("已接收物流回传（待对接平台发货）: %s %s", req.ExpressCompany, req.ExpressNo),
-	}, nil
+	if err := s.ensureLogin(ctx); err != nil {
+		return nil, err
+	}
+	platform := strings.TrimSpace(req.Platform)
+	if platform == "" {
+		platform = "FXG"
+	}
+	res, err := s.session.ManualShip(ctx, kdzs.ManualShipRequest{
+		Platform:       platform,
+		SysTid:         strings.TrimSpace(req.PlatformSysTid),
+		Tid:            strings.TrimSpace(req.PlatformTid),
+		ExpressCompany: strings.TrimSpace(req.ExpressCompany),
+		ExpressNo:      strings.TrimSpace(req.ExpressNo),
+	})
+	if err != nil {
+		// 若助手已发货（幂等核对失败信息），仍返回可识别结果
+		if res != nil && res.Success {
+			return &ShipCallbackResult{Accepted: true, Message: res.Message}, nil
+		}
+		return nil, err
+	}
+	msg := res.Message
+	if msg == "" {
+		msg = fmt.Sprintf("已发货 %s %s", req.ExpressCompany, req.ExpressNo)
+	}
+	if req.OrderNo != "" {
+		msg = fmt.Sprintf("%s（%s）", msg, req.OrderNo)
+	}
+	return &ShipCallbackResult{Accepted: true, Message: msg}, nil
 }
 
 type RefundQuery struct {
