@@ -266,7 +266,8 @@ func (h *Handler) ShipCallback(c *gin.Context) {
 	}
 	result, err := svc.ShipCallback(c.Request.Context(), req)
 	if err != nil {
-		response.Fail(c, http.StatusBadGateway, err.Error())
+		// 业务失败用 400，避免前端/链路误报成上游 502
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	response.OK(c, result)

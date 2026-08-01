@@ -184,16 +184,17 @@ func (s *Session) ManualShip(ctx context.Context, req ManualShipRequest) (*Manua
 			msg = ti.Message
 		}
 	}
-	// 助手偶发 KddRecord 写库失败但仍已向平台发货：再查详情确认
-	if !ok {
-		time.Sleep(500 * time.Millisecond)
-		if verify, _ := s.verifyShipped(ctx, platform, asString(trade["sysTid"]), expressNo); verify != nil && verify.Success {
+	softOK := isSoftShipSuccessMsg(msg)
+	tradeSysTid := firstNonEmpty(asString(trade["sysTid"]), sysTid)
+	// 助手偶发 KddRecord 写库失败但仍已向平台发货：多轮核对详情
+	if !ok || softOK {
+		if verify := s.verifyShippedWithRetry(ctx, platform, tradeSysTid, expressNo); verify != nil {
 			return verify, nil
 		}
 	}
-	if ok || resp.Result == 0 || resp.Result == ResultSuccess || resp.Result == 100 || resp.Result == 101 {
+	if ok || softOK || resp.Result == 0 || resp.Result == ResultSuccess || resp.Result == 100 || resp.Result == 101 {
 		result.Success = true
-		if msg == "" || strings.Contains(msg, "SqlMapClient") || strings.Contains(msg, "factory_user_id") {
+		if msg == "" || softOK {
 			msg = fmt.Sprintf("已发货 %s %s", name, expressNo)
 		}
 		result.Message = msg
@@ -204,11 +205,31 @@ func (s *Session) ManualShip(ctx context.Context, req ManualShipRequest) (*Manua
 	}
 	// 非待发货但单号已存在
 	if strings.Contains(msg, "非【待发货】") || strings.Contains(msg, "非待发货") {
-		if verify, _ := s.verifyShipped(ctx, platform, asString(trade["sysTid"]), expressNo); verify != nil {
+		if verify := s.verifyShippedWithRetry(ctx, platform, tradeSysTid, expressNo); verify != nil {
 			return verify, nil
 		}
 	}
 	return &ManualShipResult{Success: false, Message: msg, ExpressNo: expressNo, Company: name}, fmt.Errorf("%s", msg)
+}
+
+func isSoftShipSuccessMsg(msg string) bool {
+	msg = strings.TrimSpace(msg)
+	if msg == "" {
+		return false
+	}
+	return strings.Contains(msg, "SqlMapClient") ||
+		strings.Contains(msg, "factory_user_id") ||
+		strings.Contains(msg, "KddRecord")
+}
+
+func (s *Session) verifyShippedWithRetry(ctx context.Context, platform, sysTid, expressNo string) *ManualShipResult {
+	for _, d := range []time.Duration{600 * time.Millisecond, 1200 * time.Millisecond, 2000 * time.Millisecond} {
+		time.Sleep(d)
+		if verify, _ := s.verifyShipped(ctx, platform, sysTid, expressNo); verify != nil && verify.Success {
+			return verify
+		}
+	}
+	return nil
 }
 
 func (s *Session) verifyShipped(ctx context.Context, platform, sysTid, expressNo string) (*ManualShipResult, error) {
@@ -236,10 +257,9 @@ func matchShippedTracking(trade map[string]any, expressNo string) *ManualShipRes
 	if expressNo == "" || trade == nil {
 		return nil
 	}
-	status := strings.ToUpper(asString(trade["platformOrderStatus"], trade["tradeStatus"]))
-	shipped := strings.Contains(status, "SHIP") || status == "SELLER_CONSIGNED"
 	no, company := extractLogistics(trade)
-	if no == expressNo || (shipped && no != "" && strings.EqualFold(no, expressNo)) {
+	// 单号已写入物流详情即视为成功（状态刷新可能滞后）
+	if no != "" && (no == expressNo || strings.EqualFold(no, expressNo)) {
 		return &ManualShipResult{
 			Success:    true,
 			Message:    fmt.Sprintf("已发货 %s %s", firstNonEmpty(company, asString(trade["expressCompany"])), no),
@@ -248,8 +268,16 @@ func matchShippedTracking(trade map[string]any, expressNo string) *ManualShipRes
 			TogetherID: firstNonEmpty(asString(trade["togetherId"]), asString(trade["tid"])),
 		}
 	}
-	if shipped && no == expressNo {
-		return &ManualShipResult{Success: true, Message: "已发货", ExpressNo: no, Company: company}
+	status := strings.ToUpper(asString(trade["platformOrderStatus"], trade["tradeStatus"]))
+	shipped := strings.Contains(status, "SHIP") || status == "SELLER_CONSIGNED"
+	if shipped && no != "" {
+		return &ManualShipResult{
+			Success:    true,
+			Message:    fmt.Sprintf("已发货 %s %s", firstNonEmpty(company, asString(trade["expressCompany"])), no),
+			ExpressNo:  no,
+			Company:    company,
+			TogetherID: firstNonEmpty(asString(trade["togetherId"]), asString(trade["tid"])),
+		}
 	}
 	return nil
 }
@@ -325,11 +353,12 @@ func buildManualShipInfo(trade map[string]any, dec *DecryptedReceiver, kdCode, k
 		}
 	}
 
+	factoryUID := firstNonNilID(trade["factoryUserId"], trade["ownerUserId"], trade["userId"])
 	return map[string]any{
 		"tradeType":          asString(trade["tradeType"]),
 		"userId":             trade["userId"],
 		"ownerUserId":        trade["ownerUserId"],
-		"factoryUserId":      trade["factoryUserId"],
+		"factoryUserId":      factoryUID,
 		"togetherId":         togetherID,
 		"buyerNick":          asString(trade["buyerNick"]),
 		"sellerFlag":         "",
@@ -375,6 +404,44 @@ func buildManualShipInfo(trade map[string]any, dec *DecryptedReceiver, kdCode, k
 		"caid":               asString(trade["oaid"], trade["caid"]),
 		"ttCode":             1,
 	}
+}
+
+func firstNonNilID(values ...any) any {
+	for _, v := range values {
+		if v == nil {
+			continue
+		}
+		switch t := v.(type) {
+		case string:
+			if strings.TrimSpace(t) == "" || t == "null" || t == "0" {
+				continue
+			}
+			return t
+		case float64:
+			if t == 0 {
+				continue
+			}
+			return t
+		case int:
+			if t == 0 {
+				continue
+			}
+			return t
+		case int64:
+			if t == 0 {
+				continue
+			}
+			return t
+		case json.Number:
+			if s := t.String(); s == "" || s == "0" {
+				continue
+			}
+			return t
+		default:
+			return v
+		}
+	}
+	return nil
 }
 
 func oidsContain(trade map[string]any, tid string) bool {
