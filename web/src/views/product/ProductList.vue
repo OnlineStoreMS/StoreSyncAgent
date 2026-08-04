@@ -3,21 +3,35 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import {
+  compareStoreProduct,
   getProductSyncProgress,
   listProducts,
+  searchCoreProducts,
   syncProducts,
   type Product,
+  type ProductCompareResult,
+  type ProductCoreSearchItem,
   type ProductSyncProgress,
 } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
 
 const kdzsStore = useKdzsStore()
 
-const loading = reactive({ products: false, sync: false })
+const loading = reactive({ products: false, sync: false, coreSearch: false, compare: false })
 const products = ref<Product[]>([])
 const total = ref(0)
 const syncProgress = ref<ProductSyncProgress | null>(null)
 const showMoreFilters = ref(false)
+
+const compareVisible = ref(false)
+const compareStep = ref<'pick' | 'result'>('pick')
+const compareStoreItem = ref<Product | null>(null)
+const coreKeyword = ref('')
+const coreProducts = ref<ProductCoreSearchItem[]>([])
+const coreTotal = ref(0)
+const corePage = ref(1)
+const selectedCoreId = ref<number | null>(null)
+const compareResult = ref<ProductCompareResult | null>(null)
 let progressTimer: ReturnType<typeof setInterval> | null = null
 let filterDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let loadSeq = 0
@@ -100,6 +114,99 @@ function approveTagType(status?: string) {
   if (s === 'instock' || s === 'in_stock') return 'info'
   if (s === 'soldout' || s === 'sold_out') return 'warning'
   return 'info'
+}
+
+function kindLabel(kind: string) {
+  switch (kind) {
+    case 'store_only':
+      return '店铺有 / 中心无'
+    case 'core_only':
+      return '中心有 / 店铺无'
+    default:
+      return kind
+  }
+}
+
+function kindTagType(kind: string) {
+  switch (kind) {
+    case 'store_only':
+      return 'warning'
+    case 'core_only':
+      return 'success'
+    default:
+      return ''
+  }
+}
+
+async function downloadSkuImage(url: string, specValue: string) {
+  if (!url) return
+  const filename = `${(specValue || 'sku').replace(/[\\/:*?"<>|]/g, '_').slice(0, 80)}.jpg`
+  try {
+    const resp = await fetch(url, { mode: 'cors' })
+    if (!resp.ok) throw new Error(`http ${resp.status}`)
+    const blob = await resp.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = objectUrl
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(objectUrl)
+  } catch {
+    // 跨域失败时直接打开原图
+    window.open(url, '_blank', 'noopener')
+  }
+}
+
+async function openCompare(row: Product) {
+  compareStoreItem.value = row
+  compareStep.value = 'pick'
+  compareResult.value = null
+  selectedCoreId.value = null
+  coreKeyword.value = row.title || ''
+  corePage.value = 1
+  compareVisible.value = true
+  await loadCoreProducts()
+}
+
+async function loadCoreProducts() {
+  loading.coreSearch = true
+  try {
+    const data = await searchCoreProducts({
+      keyword: coreKeyword.value || undefined,
+      page: corePage.value,
+      pageSize: 10,
+    })
+    coreProducts.value = data.list || []
+    coreTotal.value = data.total || 0
+  } catch (e) {
+    ElMessage.error((e as Error).message || '搜索 ProductCore 商品失败')
+  } finally {
+    loading.coreSearch = false
+  }
+}
+
+async function runCompare() {
+  if (!compareStoreItem.value || !selectedCoreId.value) {
+    ElMessage.warning('请先选择 ProductCore 上品')
+    return
+  }
+  loading.compare = true
+  try {
+    compareResult.value = await compareStoreProduct({
+      coreProductId: selectedCoreId.value,
+      storeItem: compareStoreItem.value,
+    })
+    compareStep.value = 'result'
+  } catch (e) {
+    ElMessage.error((e as Error).message || '比对失败')
+  } finally {
+    loading.compare = false
+  }
+}
+
+function backToPick() {
+  compareStep.value = 'pick'
+  compareResult.value = null
 }
 
 async function loadProducts() {
@@ -458,6 +565,11 @@ onBeforeUnmount(() => {
         </el-table-column>
         <el-table-column prop="itemId" label="商品ID" min-width="140" show-overflow-tooltip />
         <el-table-column prop="outerId" label="商家编码" min-width="120" show-overflow-tooltip />
+        <el-table-column label="操作" width="90" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openCompare(row)">对比</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <div class="pager" v-if="total > filters.pageSize">
@@ -471,6 +583,186 @@ onBeforeUnmount(() => {
         />
       </div>
     </el-card>
+
+    <el-dialog
+      v-model="compareVisible"
+      :title="compareStep === 'pick' ? '选择 ProductCore 上品对比' : 'SKU 对比结果'"
+      width="920px"
+      destroy-on-close
+      top="6vh"
+    >
+      <template v-if="compareStep === 'pick'">
+        <div class="compare-tip">
+          店铺商品：<strong>{{ compareStoreItem?.title }}</strong>
+          <span class="muted">（{{ compareStoreItem?.itemId }}）</span>
+        </div>
+        <div class="compare-search">
+          <el-input
+            v-model="coreKeyword"
+            clearable
+            placeholder="搜索 ProductCore 上品名称 / 编码"
+            style="width: 320px"
+            @keyup.enter="() => { corePage = 1; loadCoreProducts() }"
+          />
+          <el-button type="primary" :loading="loading.coreSearch" @click="() => { corePage = 1; loadCoreProducts() }">
+            搜索
+          </el-button>
+        </div>
+        <el-table
+          :data="coreProducts"
+          v-loading="loading.coreSearch"
+          border
+          stripe
+          highlight-current-row
+          empty-text="暂无上品，请调整关键词"
+          @current-change="(row: ProductCoreSearchItem | null) => { selectedCoreId = row?.id ?? null }"
+        >
+          <el-table-column width="48" align="center">
+            <template #default="{ row }">
+              <el-radio v-model="selectedCoreId" :value="row.id" @click.stop />
+            </template>
+          </el-table-column>
+          <el-table-column label="图片" width="64">
+            <template #default="{ row }">
+              <el-image v-if="row.pic" :src="row.pic" fit="cover" class="sku-thumb" />
+              <span v-else class="muted">-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" label="上品名称" min-width="220" show-overflow-tooltip />
+          <el-table-column prop="price" label="价格" width="90" />
+          <el-table-column prop="stock" label="库存" width="80" />
+          <el-table-column prop="skuCount" label="SKU数" width="80" />
+          <el-table-column prop="id" label="ID" width="80" />
+        </el-table>
+        <div class="pager" v-if="coreTotal > 10">
+          <el-pagination
+            background
+            layout="total, prev, pager, next"
+            :total="coreTotal"
+            :page-size="10"
+            :current-page="corePage"
+            @current-change="(p: number) => { corePage = p; loadCoreProducts() }"
+          />
+        </div>
+      </template>
+
+      <template v-else-if="compareResult">
+        <div class="compare-tip">
+          {{ compareResult.summary.storeTitle }}
+          <span class="muted"> ↔ </span>
+          {{ compareResult.summary.coreProductName }}
+        </div>
+        <div class="summary">
+          <div class="summary-card"><div class="v">{{ compareResult.summary.storeSkuCount }}</div><div class="l">店铺 SKU</div></div>
+          <div class="summary-card"><div class="v">{{ compareResult.summary.coreSkuCount }}</div><div class="l">中心 SKU</div></div>
+          <div class="summary-card"><div class="v">{{ compareResult.summary.matchedCount }}</div><div class="l">匹配</div></div>
+          <div class="summary-card" :class="{ danger: compareResult.summary.specDiffCount > 0 }">
+            <div class="v">{{ compareResult.summary.specDiffCount }}</div><div class="l">规格差异</div>
+          </div>
+          <div class="summary-card" :class="{ danger: compareResult.summary.priceDiffCount > 0 }">
+            <div class="v">{{ compareResult.summary.priceDiffCount }}</div><div class="l">价格差异</div>
+          </div>
+          <div class="summary-card" :class="{ danger: compareResult.summary.stockDiffCount > 0 }">
+            <div class="v">{{ compareResult.summary.stockDiffCount }}</div><div class="l">库存差异</div>
+          </div>
+        </div>
+
+        <div class="section-title">① 规格值差异</div>
+        <el-table :data="compareResult.specDiffs" border stripe size="small" empty-text="无规格差异">
+          <el-table-column label="类型" width="130">
+            <template #default="{ row }">
+              <el-tag :type="kindTagType(row.kind)" size="small">{{ kindLabel(row.kind) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="规格值" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span :class="{ hl: true, strike: row.kind === 'store_only' }">{{ row.specValue }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="SKU图片" width="110" align="center">
+            <template #default="{ row }">
+              <template v-if="row.kind === 'core_only' && row.image">
+                <div class="sku-pic-cell">
+                  <el-image
+                    :src="row.image"
+                    fit="cover"
+                    class="sku-thumb"
+                    :preview-src-list="[row.image]"
+                    preview-teleported
+                  />
+                  <el-button link type="primary" size="small" @click="downloadSkuImage(row.image, row.specValue)">
+                    下载
+                  </el-button>
+                </div>
+              </template>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="价格" width="90" align="right">
+            <template #default="{ row }">
+              <span v-if="row.kind === 'core_only'">{{ Number(row.price ?? 0).toFixed(2) }}</span>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="库存" width="80" align="right">
+            <template #default="{ row }">
+              <span v-if="row.kind === 'core_only'">{{ row.stock ?? 0 }}</span>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="section-title mt">② 价格 / 库存差异</div>
+        <el-table :data="compareResult.priceStockDiffs" border stripe size="small" empty-text="无价格/库存差异">
+          <el-table-column prop="specValue" label="规格值" min-width="200" show-overflow-tooltip />
+          <el-table-column label="价格(店/中心)" min-width="200">
+            <template #default="{ row }">
+              <span :class="{ hl: row.priceDiff }">{{ Number(row.storePrice).toFixed(2) }}</span>
+              <span class="sep">/</span>
+              <span :class="{ hl: row.priceDiff }">{{ Number(row.corePrice).toFixed(2) }}</span>
+              <el-tag
+                v-if="row.priceDiff && Number(row.storePrice) < Number(row.corePrice)"
+                type="danger"
+                size="small"
+                effect="plain"
+                class="price-note"
+              >
+                店铺价低于中心价
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="库存(店/中心)" min-width="180">
+            <template #default="{ row }">
+              <span :class="{ hl: row.stockDiff }">{{ row.storeStock }}</span>
+              <span class="sep">/</span>
+              <span :class="{ hl: row.stockDiff }">{{ row.coreStock }}</span>
+              <el-tag
+                v-if="Number(row.coreStock) === 0"
+                type="warning"
+                size="small"
+                effect="plain"
+                class="price-note"
+              >
+                中心缺货
+              </el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+      </template>
+
+      <template #footer>
+        <template v-if="compareStep === 'pick'">
+          <el-button @click="compareVisible = false">取消</el-button>
+          <el-button type="primary" :loading="loading.compare" :disabled="!selectedCoreId" @click="runCompare">
+            开始比对
+          </el-button>
+        </template>
+        <template v-else>
+          <el-button @click="backToPick">重新选择上品</el-button>
+          <el-button type="primary" @click="compareVisible = false">关闭</el-button>
+        </template>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -539,4 +831,19 @@ onBeforeUnmount(() => {
 .sku-thumb :deep(img) {
   referrerpolicy: no-referrer;
 }
+.compare-tip { margin-bottom: 12px; font-size: 13px; color: #334155; }
+.compare-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.summary { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-bottom: 14px; }
+.summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; }
+.summary-card.danger { background: #fff1f0; border-color: #ffccc7; }
+.summary-card .v { font-size: 18px; font-weight: 700; }
+.summary-card.danger .v { color: #cf1322; }
+.summary-card .l { font-size: 12px; color: #64748b; }
+.section-title { font-weight: 600; margin: 4px 0 8px; }
+.mt { margin-top: 14px; }
+.hl { color: #cf1322; font-weight: 600; }
+.strike { text-decoration: line-through; color: #94a3b8; font-weight: 500; }
+.sku-pic-cell { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.sep { margin: 0 4px; color: #94a3b8; }
+.price-note { margin-left: 8px; vertical-align: middle; }
 </style>

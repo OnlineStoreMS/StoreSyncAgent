@@ -11,25 +11,27 @@ import (
 
 	"storesyncagent/internal/config"
 	"storesyncagent/internal/feishu"
+	"storesyncagent/internal/integrations/productcore"
 	"storesyncagent/internal/kdzs"
 	"storesyncagent/internal/model"
 	"storesyncagent/internal/repo"
 )
 
 type SyncService struct {
-	cfg                 *config.Config
-	tenantID            uint64
-	globalBaseURL       string
-	kdzsRepo            *repo.KdzsRepo
-	settings            *model.TenantKdzsSetting
-	client              *kdzs.Client
-	session             *kdzs.Session
-	mu                  sync.Mutex
-	activeAccountID     string
-	returnExchangeRepo  *repo.ReturnExchangeRepo
-	notificationRepo    *repo.NotificationRepo
-	stockAlertRepo      *repo.StockAlertRepo
-	feishuClient        *feishu.Client
+	cfg                *config.Config
+	tenantID           uint64
+	globalBaseURL      string
+	kdzsRepo           *repo.KdzsRepo
+	settings           *model.TenantKdzsSetting
+	client             *kdzs.Client
+	session            *kdzs.Session
+	mu                 sync.Mutex
+	activeAccountID    string
+	returnExchangeRepo *repo.ReturnExchangeRepo
+	notificationRepo   *repo.NotificationRepo
+	stockAlertRepo     *repo.StockAlertRepo
+	feishuClient       *feishu.Client
+	productCore        *productcore.Client
 }
 
 func NewSyncService(
@@ -56,6 +58,7 @@ func NewSyncService(
 		notificationRepo:   notificationRepo,
 		stockAlertRepo:     stockAlertRepo,
 		feishuClient:       feishu.NewClient(),
+		productCore:        productcore.NewClient(baseCfg.Integrations.ProductCoreAPIURL),
 	}
 	if err := svc.loadSettings(); err != nil {
 		return nil, fmt.Errorf("kdzs settings: %w", err)
@@ -187,6 +190,7 @@ type ItemSkuView struct {
 	PicURL         string `json:"picUrl"`
 	ShortTitle     string `json:"shortTitle"`
 	Status         string `json:"status"`
+	State          int    `json:"state,omitempty"`
 	ProductNum     string `json:"productNum"`
 }
 
@@ -230,6 +234,9 @@ func resolveSkuPicURL(sku kdzs.ShopItemSku, itemPic string) string {
 func toItemView(item kdzs.ShopItem) ItemView {
 	skus := make([]ItemSkuView, 0, len(item.Skus))
 	for _, sku := range item.Skus {
+		if kdzs.IsPlatformDeletedSKU(sku) {
+			continue
+		}
 		skus = append(skus, ItemSkuView{
 			SkuID:          sku.SkuID,
 			PropertiesName: sku.PropertiesName,
@@ -239,6 +246,7 @@ func toItemView(item kdzs.ShopItem) ItemView {
 			PicURL:         resolveSkuPicURL(sku, item.PicURL),
 			ShortTitle:     sku.ShortTitle,
 			Status:         sku.Status,
+			State:          sku.State,
 			ProductNum:     sku.ProductNum,
 		})
 	}
@@ -261,6 +269,10 @@ func toItemView(item kdzs.ShopItem) ItemView {
 		BindTime:           item.BindTime,
 		Skus:               skus,
 	}
+}
+
+func isPlatformDeletedItem(item kdzs.ShopItem) bool {
+	return kdzs.IsPlatformDeletedStatus(item.ApproveStatus)
 }
 
 func splitShopIDs(raw string) []string {
@@ -367,6 +379,9 @@ func (s *SyncService) ListItems(ctx context.Context, q ItemQuery) (*ItemListView
 		}
 		items := make([]ItemView, 0, len(result.List))
 		for _, item := range result.List {
+			if isPlatformDeletedItem(item) {
+				continue
+			}
 			items = append(items, toItemView(item))
 		}
 		return &ItemListView{
@@ -408,6 +423,9 @@ func (s *SyncService) ListItems(ctx context.Context, q ItemQuery) (*ItemListView
 				return nil, fmt.Errorf("%s: %w", platform, err)
 			}
 			for _, item := range result.List {
+				if isPlatformDeletedItem(item) {
+					continue
+				}
 				allItems = append(allItems, toItemView(item))
 			}
 			if len(result.List) == 0 {

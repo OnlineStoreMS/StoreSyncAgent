@@ -223,8 +223,16 @@ func isSoftShipSuccessMsg(msg string) bool {
 }
 
 func (s *Session) verifyShippedWithRetry(ctx context.Context, platform, sysTid, expressNo string) *ManualShipResult {
-	for _, d := range []time.Duration{600 * time.Millisecond, 1200 * time.Millisecond, 2000 * time.Millisecond} {
-		time.Sleep(d)
+	for i, d := range []time.Duration{0, 500 * time.Millisecond, 1200 * time.Millisecond} {
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				return nil
+			case <-time.After(d):
+			}
+		} else if err := ctx.Err(); err != nil {
+			return nil
+		}
 		if verify, _ := s.verifyShipped(ctx, platform, sysTid, expressNo); verify != nil && verify.Success {
 			return verify
 		}

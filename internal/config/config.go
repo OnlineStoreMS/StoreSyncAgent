@@ -8,11 +8,16 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Kdzs     KdzsConfig   `mapstructure:"kdzs"`
-	Auth     AuthConfig   `mapstructure:"auth"`
-	CORS     CORSConfig   `mapstructure:"cors"`
+	Server       ServerConfig       `mapstructure:"server"`
+	Database     DatabaseConfig     `mapstructure:"database"`
+	Kdzs         KdzsConfig         `mapstructure:"kdzs"`
+	Auth         AuthConfig         `mapstructure:"auth"`
+	CORS         CORSConfig         `mapstructure:"cors"`
+	Integrations IntegrationsConfig `mapstructure:"integrations"`
+}
+
+type IntegrationsConfig struct {
+	ProductCoreAPIURL string `mapstructure:"productcore_api_url"`
 }
 
 type DatabaseConfig struct {

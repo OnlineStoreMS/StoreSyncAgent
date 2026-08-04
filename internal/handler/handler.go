@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -102,6 +103,41 @@ func (h *Handler) GetProductSyncProgress(c *gin.Context) {
 	}
 	platform := c.Query("platform")
 	result, err := svc.GetItemSyncProgress(c.Request.Context(), platform)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) CompareProducts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req service.ProductCompareReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := svc.CompareStoreItemWithCore(c.Request.Context(), authcontext.BearerToken(c), req)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) SearchCoreProducts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
+	result, err := svc.SearchCoreProducts(c.Request.Context(), authcontext.BearerToken(c), c.Query("keyword"), page, pageSize)
 	if err != nil {
 		response.Fail(c, http.StatusBadGateway, err.Error())
 		return

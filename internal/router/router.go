@@ -40,6 +40,8 @@ func Setup(h *handler.Handler, cfg *config.Config, webDist string) *gin.Engine {
 		adminGroup.GET("/products", h.ListProducts)
 		adminGroup.POST("/products/sync", h.SyncProducts)
 		adminGroup.GET("/products/sync-progress", h.GetProductSyncProgress)
+		adminGroup.POST("/products/compare", h.CompareProducts)
+		adminGroup.GET("/products/core-search", h.SearchCoreProducts)
 		adminGroup.GET("/product-stock-alerts", h.GetStockAlert)
 		adminGroup.PUT("/product-stock-alerts", h.SaveStockAlert)
 		adminGroup.POST("/product-stock-alerts/scan", h.ScanStockAlert)

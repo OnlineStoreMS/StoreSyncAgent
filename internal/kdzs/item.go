@@ -30,7 +30,9 @@ type ShopItemSku struct {
 	ScmPicURL      string `json:"scmPicUrl"`
 	ShortTitle     string `json:"shortTitle"`
 	Status         string `json:"status"`
-	ProductNum     string `json:"productNum"`
+	// State 快递助手 SKU 扩展状态：1 = 平台已删除（status 仍可能为 normal）
+	State      int    `json:"state"`
+	ProductNum string `json:"productNum"`
 }
 
 type ShopItem struct {
@@ -183,21 +185,48 @@ func checkItemProgressResult(resp *itemAPIResponse) (*SyncProgress, error) {
 }
 
 func ItemApproveStatusLabel(status string) string {
-	switch strings.ToLower(strings.TrimSpace(status)) {
+	raw := strings.TrimSpace(status)
+	switch strings.ToLower(raw) {
 	case "onsale", "on_sale":
 		return "在售"
 	case "instock", "in_stock":
 		return "仓库中"
 	case "soldout", "sold_out":
 		return "售罄"
-	case "delete", "deleted":
-		return "已删除"
+	case "delete", "deleted", "platform_deleted", "platform-deleted":
+		return "平台已删除"
 	default:
-		if looksLikeChineseLabel(status) {
-			return status
+		if IsPlatformDeletedStatus(raw) {
+			return "平台已删除"
 		}
-		return status
+		if looksLikeChineseLabel(raw) {
+			return raw
+		}
+		return raw
 	}
+}
+
+// IsPlatformDeletedStatus 判断快递助手返回的状态是否为「平台已删除」。
+// SKU.status / SPU.approveStatus 可能是英文 delete/deleted，或中文「平台已删除」「已删除」。
+func IsPlatformDeletedStatus(status string) bool {
+	s := strings.TrimSpace(status)
+	if s == "" {
+		return false
+	}
+	switch strings.ToLower(s) {
+	case "delete", "deleted", "platform_deleted", "platform-deleted":
+		return true
+	}
+	return strings.Contains(s, "删除")
+}
+
+// IsPlatformDeletedSKU 快递助手上标注「平台已删除」的 SKU，业务侧不再使用。
+// 商品管理页「上架状态=平台已删除」对应字段是 state=1（status 仍常为 normal）。
+func IsPlatformDeletedSKU(sku ShopItemSku) bool {
+	if sku.State == 1 {
+		return true
+	}
+	return IsPlatformDeletedStatus(sku.Status)
 }
 
 func (s *Session) ListShopItems(ctx context.Context, platform string, q ItemListQuery) (*ItemListResult, error) {

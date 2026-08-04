@@ -204,6 +204,74 @@ export async function getProductSyncProgress(platform: string) {
   return unwrap(await http.get<ProductSyncProgress>('/products/sync-progress', { params: { platform } }))
 }
 
+export interface ProductCoreSearchItem {
+  id: number
+  name: string
+  pic?: string
+  price: number
+  stock: number
+  skuCount: number
+}
+
+export interface ProductCompareSummary {
+  storeTitle: string
+  storeItemId: string
+  coreProductId: number
+  coreProductName: string
+  storeSkuCount: number
+  coreSkuCount: number
+  matchedCount: number
+  specDiffCount: number
+  priceDiffCount: number
+  stockDiffCount: number
+}
+
+export interface SpecDiffRow {
+  kind: 'store_only' | 'core_only' | string
+  specValue: string
+  storeSpec?: string
+  coreSpec?: string
+  storeCode?: string
+  coreCode?: string
+  /** 待新增 SKU（中心有 / 店铺无） */
+  image?: string
+  price?: number
+  stock?: number
+}
+
+export interface PriceStockDiffRow {
+  specValue: string
+  storeSpec: string
+  coreSpec: string
+  storeCode?: string
+  coreCode?: string
+  storePrice: number
+  corePrice: number
+  priceDiff: boolean
+  storeStock: number
+  coreStock: number
+  stockDiff: boolean
+}
+
+export interface ProductCompareResult {
+  summary: ProductCompareSummary
+  specDiffs: SpecDiffRow[]
+  priceStockDiffs: PriceStockDiffRow[]
+}
+
+export async function searchCoreProducts(params: { keyword?: string; page?: number; pageSize?: number }) {
+  return unwrap(
+    await http.get<{ list: ProductCoreSearchItem[]; total: number; page: number; pageSize: number }>(
+      '/products/core-search',
+      { params },
+    ),
+  )
+}
+
+export async function compareStoreProduct(body: { coreProductId: number; storeItem: Product }) {
+  return unwrap(await http.post<ProductCompareResult>('/products/compare', body))
+}
+
 export async function listOrders(params: {
   platform?: string
   shopId?: string

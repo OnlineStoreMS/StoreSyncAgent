@@ -219,6 +219,9 @@ func (s *SyncService) listAllItemsForStockAlert(ctx context.Context, cfg store.S
 			return nil, err
 		}
 		for _, item := range result.List {
+			if isPlatformDeletedItem(item) {
+				continue
+			}
 			all = append(all, toItemView(item))
 		}
 		if len(result.List) == 0 {
