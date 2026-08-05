@@ -11,7 +11,7 @@ import {
   type RefundStats,
 } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
-import { dateShortcuts, defaultDateRange } from '../../utils/date'
+import { dateShortcuts, dateRangeDefaultTime, defaultDateRange } from '../../utils/date'
 
 const route = useRoute()
 const kdzsStore = useKdzsStore()
@@ -302,6 +302,7 @@ onMounted(async () => {
             end-placeholder="结束"
             value-format="YYYY-MM-DD HH:mm:ss"
             :shortcuts="dateShortcuts"
+            :default-time="dateRangeDefaultTime"
             @change="onFilterChange"
           />
         </el-form-item>

@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import { decryptOrders, listOrders, setOrderAgentType, type Order, type OrderFilters, type OrderListResponse, type TradeGoods } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
 import { copyToClipboard } from '../../utils/clipboard'
-import { dateShortcuts, defaultDateRange, formatOrderCopyDateTime } from '../../utils/date'
+import { dateShortcuts, dateRangeDefaultTime, defaultDateRange, formatOrderCopyDateTime } from '../../utils/date'
 
 const kdzsStore = useKdzsStore()
 const route = useRoute()
@@ -460,6 +460,7 @@ onMounted(async () => {
             end-placeholder="结束时间"
             value-format="YYYY-MM-DD HH:mm:ss"
             :shortcuts="dateShortcuts"
+            :default-time="dateRangeDefaultTime"
             style="width: 420px"
             @change="onFilterChange"
           />
