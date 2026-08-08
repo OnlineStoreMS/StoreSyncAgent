@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -27,6 +28,8 @@ type UpdateTradeRemarkRequest struct {
 	SysTids     []string
 	MemoType    string // sellerMemo | fenFaMemo | printerMemo
 	Remark      string
+	// SellerFlag 卖家备注旗帜（0灰 1红 2黄 3绿 4蓝 5紫）；仅 sellerMemo 生效，nil 表示沿用原旗
+	SellerFlag *int
 }
 
 type updateRemarkResponse struct {
@@ -78,6 +81,12 @@ func (s *Session) UpdateTradeRemark(ctx context.Context, req UpdateTradeRemarkRe
 			return fmt.Errorf("查询订单详情失败: %w", lastErr)
 		}
 		return fmt.Errorf("快递助手未找到可写回备注的订单")
+	}
+	if req.MemoType == MemoTypeSeller && req.SellerFlag != nil {
+		star := strconv.Itoa(*req.SellerFlag)
+		for _, item := range list {
+			item["star"] = star
+		}
 	}
 
 	ps, err := s.PlatformSession(ctx, req.Platform)

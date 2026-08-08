@@ -251,6 +251,63 @@ func (h *Handler) SetOrderAgentType(c *gin.Context) {
 	response.OK(c, result)
 }
 
+func (h *Handler) ParseHandAddress(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req service.ParseAddressRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := svc.ParseHandAddress(c.Request.Context(), req)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) CreateHandOrder(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req service.CreateHandOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := svc.CreateHandOrder(c.Request.Context(), req)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) BatchCreateHandOrder(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	var req service.BatchCreateHandOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	result, err := svc.BatchCreateHandOrder(c.Request.Context(), req)
+	if err != nil {
+		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
 func (h *Handler) CancelOrderPush(c *gin.Context) {
 	svc, err := h.svc(c)
 	if err != nil {

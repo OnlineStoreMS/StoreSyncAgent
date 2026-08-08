@@ -1030,6 +1030,7 @@ type UpdateTradeRemarkRequest struct {
 	SysTids     []string `json:"sysTids"`
 	MemoType    string   `json:"memoType"` // sellerMemo | printerMemo | fenFaMemo
 	Remark      string   `json:"remark"`
+	SellerFlag  *int     `json:"sellerFlag"` // 卖家备注旗帜，仅 sellerMemo
 }
 
 func (s *SyncService) UpdateTradeRemark(ctx context.Context, req UpdateTradeRemarkRequest) error {
@@ -1048,6 +1049,7 @@ func (s *SyncService) UpdateTradeRemark(ctx context.Context, req UpdateTradeRema
 		SysTids:     req.SysTids,
 		MemoType:    req.MemoType,
 		Remark:      req.Remark,
+		SellerFlag:  req.SellerFlag,
 	})
 }
 

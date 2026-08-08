@@ -12,6 +12,7 @@ var PlatformHost = map[string]string{
 	PlatformXHS:    "xhsdf.kdzs.com",
 	"PDD":          "pdddf.kdzs.com",
 	"KSXD":         "ksdf.kdzs.com",
+	PlatformManual: "hand.kdzs.com",
 }
 
 func PlatformLabel(code string) string {

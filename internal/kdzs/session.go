@@ -171,11 +171,28 @@ func (s *Session) openPlatformSession(ctx context.Context, platform string) (*Pl
 	u, _ := url.Parse("https://" + host)
 	cookies := jar.Cookies(u)
 	token := s.client.Token()
-	cookieName := fmt.Sprintf("rsid_%s-%s", platform, userID)
-	for _, c := range cookies {
-		if c.Name == cookieName {
-			token = c.Value
-			break
+	// Prefer platform-specific tokens from redirect final URL (DFHAND uses kdzsMallToken).
+	if parsed != nil {
+		if mt := strings.TrimSpace(parsed.Query().Get("kdzsMallToken")); mt != "" {
+			token = mt
+		} else if mt := strings.TrimSpace(parsed.Query().Get("mainToken")); mt != "" {
+			token = mt
+		}
+	}
+	cookieCandidates := []string{
+		fmt.Sprintf("rsid_%s-%s", platform, userID),
+		fmt.Sprintf("rsid_%s", userID),
+		fmt.Sprintf("%s_df", userID),
+	}
+	for _, name := range cookieCandidates {
+		for _, c := range cookies {
+			if c.Name == name && strings.TrimSpace(c.Value) != "" {
+				// Keep mall token for DFHAND when available; otherwise use cookie.
+				if !strings.HasPrefix(strings.ToUpper(platform), "DFHAND") || !strings.HasPrefix(token, "DFHAND-") {
+					token = c.Value
+				}
+				break
+			}
 		}
 	}
 

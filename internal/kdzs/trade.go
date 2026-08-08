@@ -30,44 +30,46 @@ type TradeListResult struct {
 }
 
 type TradeListItem struct {
-	Platform        string         `json:"platform"`
-	PlatformName    string         `json:"platformName"`
-	TogetherID      string         `json:"togetherId,omitempty"`
-	SysTids         []string       `json:"sysTids,omitempty"`
-	Tids            []string       `json:"tids,omitempty"`
-	BuyerNick       string         `json:"buyerNick,omitempty"`
-	ReceiverName    string         `json:"receiverName,omitempty"`
-	ReceiverMobile  string         `json:"receiverMobile,omitempty"`
-	ReceiverAddress string         `json:"receiverAddress,omitempty"`
-	Payment         float64        `json:"payment,omitempty"`
-	PostFee         float64        `json:"postFee,omitempty"` // 邮费
-	TradeStatus     string         `json:"tradeStatus,omitempty"` // 快递助手列表态：wait_audit/wait_send
-	StatusText      string         `json:"statusText,omitempty"`  // 快递助手列表态文案
-	PlatformOrderStatus     string `json:"platformOrderStatus,omitempty"`     // 电商平台订单状态码
-	PlatformOrderStatusText string `json:"platformOrderStatusText,omitempty"` // 电商平台订单状态文案
-	AfterSaleStatus         string `json:"afterSaleStatus,omitempty"`
-	AfterSaleStatusText     string `json:"afterSaleStatusText,omitempty"`
-	CreateTime      string         `json:"createTime,omitempty"`
-	PayTime         string         `json:"payTime,omitempty"`
-	ShopName        string         `json:"shopName,omitempty"`
-	ShopID          string         `json:"shopId,omitempty"`
-	Goods           []TradeGoods   `json:"goods,omitempty"`
-	BuyerMemo       string         `json:"buyerMemo,omitempty"`
-	SellerMemo      string         `json:"sellerMemo,omitempty"`
-	FenFaMemo       string         `json:"fenFaMemo,omitempty"`
-	PrinterMemo     string         `json:"printerMemo,omitempty"`
-	AgentType       int            `json:"agentType,omitempty"`
-	FactoryID       string         `json:"factoryId,omitempty"`
-	FactoryName     string         `json:"factoryName,omitempty"`
-	Decrypted       bool           `json:"decrypted,omitempty"`
-	FormattedReceiver string       `json:"formattedReceiver,omitempty"`
+	Platform                string       `json:"platform"`
+	PlatformName            string       `json:"platformName"`
+	TogetherID              string       `json:"togetherId,omitempty"`
+	SysTids                 []string     `json:"sysTids,omitempty"`
+	Tids                    []string     `json:"tids,omitempty"`
+	BuyerNick               string       `json:"buyerNick,omitempty"`
+	ReceiverName            string       `json:"receiverName,omitempty"`
+	ReceiverMobile          string       `json:"receiverMobile,omitempty"`
+	ReceiverAddress         string       `json:"receiverAddress,omitempty"`
+	Payment                 float64      `json:"payment,omitempty"`
+	PostFee                 float64      `json:"postFee,omitempty"`                 // 邮费
+	TradeStatus             string       `json:"tradeStatus,omitempty"`             // 快递助手列表态：wait_audit/wait_send
+	StatusText              string       `json:"statusText,omitempty"`              // 快递助手列表态文案
+	PlatformOrderStatus     string       `json:"platformOrderStatus,omitempty"`     // 电商平台订单状态码
+	PlatformOrderStatusText string       `json:"platformOrderStatusText,omitempty"` // 电商平台订单状态文案
+	AfterSaleStatus         string       `json:"afterSaleStatus,omitempty"`
+	AfterSaleStatusText     string       `json:"afterSaleStatusText,omitempty"`
+	CreateTime              string       `json:"createTime,omitempty"`
+	PayTime                 string       `json:"payTime,omitempty"`
+	ShopName                string       `json:"shopName,omitempty"`
+	ShopID                  string       `json:"shopId,omitempty"`
+	Goods                   []TradeGoods `json:"goods,omitempty"`
+	BuyerMemo               string       `json:"buyerMemo,omitempty"`
+	SellerMemo              string       `json:"sellerMemo,omitempty"`
+	// SellerFlag 卖家备注旗帜（与淘宝/快递助手 star 一致：0灰 1红 2黄 3绿 4蓝 5紫）；nil=未带回
+	SellerFlag        *int   `json:"sellerFlag,omitempty"`
+	FenFaMemo         string `json:"fenFaMemo,omitempty"`
+	PrinterMemo       string `json:"printerMemo,omitempty"`
+	AgentType         int    `json:"agentType,omitempty"`
+	FactoryID         string `json:"factoryId,omitempty"`
+	FactoryName       string `json:"factoryName,omitempty"`
+	Decrypted         bool   `json:"decrypted,omitempty"`
+	FormattedReceiver string `json:"formattedReceiver,omitempty"`
 	// 发货物流（来自详情 logisticsInfoList / consignTime）
-	ExpressCompany string           `json:"expressCompany,omitempty"`
-	ExpressCode    string           `json:"expressCode,omitempty"`
-	ExpressNo      string           `json:"expressNo,omitempty"`
-	ShippedAt      string           `json:"shippedAt,omitempty"` // 发货时间，优先 consignTime
-	Logistics      []TradeLogistics `json:"logistics,omitempty"`
-	DecryptMeta     *TradeDecryptMeta `json:"-"`
+	ExpressCompany string            `json:"expressCompany,omitempty"`
+	ExpressCode    string            `json:"expressCode,omitempty"`
+	ExpressNo      string            `json:"expressNo,omitempty"`
+	ShippedAt      string            `json:"shippedAt,omitempty"` // 发货时间，优先 consignTime
+	Logistics      []TradeLogistics  `json:"logistics,omitempty"`
+	DecryptMeta    *TradeDecryptMeta `json:"-"`
 }
 
 // TradeLogistics 快递助手包裹物流信息
@@ -84,30 +86,30 @@ type TradeGoods struct {
 	PicURL  string  `json:"picUrl,omitempty"`
 	Num     int     `json:"num,omitempty"`
 	OuterID string  `json:"outerId,omitempty"`
-	SkuID   string  `json:"skuId,omitempty"`   // 平台 SKU ID
-	ItemID  string  `json:"itemId,omitempty"`  // 平台商品/货品 ID
+	SkuID   string  `json:"skuId,omitempty"`  // 平台 SKU ID
+	ItemID  string  `json:"itemId,omitempty"` // 平台商品/货品 ID
 	Price   float64 `json:"price,omitempty"`
 }
 
 type tradeListRequest struct {
-	RDSUser         bool     `json:"rdsUser"`
-	AsyncCode       string   `json:"asyncCode"`
-	Platform        string   `json:"platform"`
-	TradeStatus     string   `json:"tradeStatus"`
-	Status          string   `json:"status"`
-	PageNo          int      `json:"pageNo"`
-	PageSize        int      `json:"pageSize"`
-	UserID          int64    `json:"userId,omitempty"`
-	ShopIDs         []string `json:"shopIds,omitempty"`
-	FactoryIDs      []string `json:"factoryIds,omitempty"`
-	DistributorIDs  []string `json:"distributorIds,omitempty"`
-	Tids            []string `json:"tids,omitempty"`
-	StartDateTime   string   `json:"startDateTime,omitempty"`
-	EndDateTime     string   `json:"endDateTime,omitempty"`
-	TimeType        int      `json:"timeType,omitempty"`
-	ShowDaifaTrade  int      `json:"showDaifaTrade,omitempty"`
-	IsFXGDaifa      int      `json:"isFXGDaifa,omitempty"`
-	FxgDaifaPage    bool     `json:"fxgDaifaPage,omitempty"`
+	RDSUser        bool     `json:"rdsUser"`
+	AsyncCode      string   `json:"asyncCode"`
+	Platform       string   `json:"platform"`
+	TradeStatus    string   `json:"tradeStatus"`
+	Status         string   `json:"status"`
+	PageNo         int      `json:"pageNo"`
+	PageSize       int      `json:"pageSize"`
+	UserID         int64    `json:"userId,omitempty"`
+	ShopIDs        []string `json:"shopIds,omitempty"`
+	FactoryIDs     []string `json:"factoryIds,omitempty"`
+	DistributorIDs []string `json:"distributorIds,omitempty"`
+	Tids           []string `json:"tids,omitempty"`
+	StartDateTime  string   `json:"startDateTime,omitempty"`
+	EndDateTime    string   `json:"endDateTime,omitempty"`
+	TimeType       int      `json:"timeType,omitempty"`
+	ShowDaifaTrade int      `json:"showDaifaTrade,omitempty"`
+	IsFXGDaifa     int      `json:"isFXGDaifa,omitempty"`
+	FxgDaifaPage   bool     `json:"fxgDaifaPage,omitempty"`
 }
 
 type tradeListResponse struct {
@@ -682,6 +684,15 @@ func flattenTradeMap(item *TradeListItem, trade map[string]any) {
 	}
 	if item.SellerMemo == "" {
 		item.SellerMemo = asString(trade["sellerMemo"], trade["sysSellerMemo"])
+	}
+	if item.SellerFlag == nil {
+		// 旗帜可能是 0（灰旗）；仅当字段存在时写入
+		if raw := firstNonEmpty(
+			asString(trade["sellerFlag"], trade["sellerFlagId"], trade["flagId"]),
+		); raw != "" {
+			v := asInt(trade["sellerFlag"], trade["sellerFlagId"], trade["flagId"])
+			item.SellerFlag = &v
+		}
 	}
 	if item.FenFaMemo == "" {
 		// 快递助手分发备注：详情多为 sysFenfaMemo，列表偶发 fenFaMemo
