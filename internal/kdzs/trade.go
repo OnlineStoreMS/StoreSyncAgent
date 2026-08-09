@@ -330,11 +330,21 @@ func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (trad
 }
 
 func (s *Session) platformShopIDs(ctx context.Context, platform string) ([]string, error) {
+	platform = strings.ToUpper(strings.TrimSpace(platform))
+	// 手工单无电商店铺绑定：优先 mall/list，其次用登录 userId 作为 shopIds
+	if platform == PlatformManual {
+		if _, mallIDs, err := s.LoadQueryContext(ctx, platform); err == nil && len(mallIDs) > 0 {
+			return mallIDs, nil
+		}
+		if uid := strings.TrimSpace(s.UserID()); uid != "" {
+			return []string{uid}, nil
+		}
+		return nil, nil
+	}
 	shops, err := s.client.ListEcommerceShops(ctx)
 	if err != nil {
 		return nil, err
 	}
-	platform = strings.ToUpper(platform)
 	out := make([]string, 0)
 	for _, shop := range shops {
 		if strings.ToUpper(shop.Platform) == platform && shop.MallUserID != "" {

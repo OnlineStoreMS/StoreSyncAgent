@@ -28,6 +28,8 @@ type SetTradeAgentTypeRequest struct {
 	AgentType   int
 	FactoryID   string
 	SysTids     []string
+	// Tids 与 SysTids 对齐的平台单号（手工单 DFHAND 详情缺失时用于兜底拼 tradeInfo）
+	Tids []string
 }
 
 type AgentTypeResult struct {
@@ -114,6 +116,10 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 	if err != nil {
 		return nil, err
 	}
+	// 手工单常因详情接口/厂家过滤查不到包：用 sysTid(+tid) 兜底
+	if len(tradeInfoList) == 0 {
+		tradeInfoList = minimalTradeInfoList(req.SysTids, req.Tids)
+	}
 	if len(tradeInfoList) == 0 {
 		return nil, fmt.Errorf("no trade info built")
 	}
@@ -122,31 +128,20 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 	if err != nil {
 		return nil, err
 	}
-	body := map[string]any{
-		"tradeInfoList": tradeInfoList,
-		"agentType":     req.AgentType,
-	}
-	if req.AgentType == AgentTypePushFactory {
-		body["factoryId"] = req.FactoryID
-	}
-	var resp setTradeAgentTypeResponse
-	if err := s.client.postPlatform(ctx, ps, "/tradeManage/setTradeAgentType", body, &resp); err != nil {
-		return nil, err
-	}
-	if resp.Result != 0 && resp.Result != ResultSuccess && resp.Result != 100 {
-		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed")
-		if len(resp.FailMessage) > 0 {
-			for _, v := range resp.FailMessage {
-				if strings.TrimSpace(v) != "" {
-					msg = v
-					break
-				}
+	resp, err := s.postSetTradeAgentType(ctx, ps, tradeInfoList, req.AgentType, req.FactoryID)
+	needRetry := err != nil || (resp != nil && len(resp.FailList) > 0 && len(resp.SuccessList) == 0)
+	if needRetry && strings.EqualFold(strings.TrimSpace(req.Platform), PlatformManual) {
+		minimal := minimalTradeInfoList(req.SysTids, req.Tids)
+		if len(minimal) > 0 {
+			if resp2, err2 := s.postSetTradeAgentType(ctx, ps, minimal, req.AgentType, req.FactoryID); err2 == nil {
+				resp, err = resp2, nil
+			} else if err == nil {
+				err = err2
 			}
 		}
-		if len(resp.FailList) > 0 && len(resp.SuccessList) == 0 {
-			return nil, fmt.Errorf("%s", msg)
-		}
-		// 部分成功仍返回结果，由调用方看 FailList
+	}
+	if err != nil {
+		return nil, err
 	}
 	if len(resp.FailList) > 0 && len(resp.SuccessList) == 0 {
 		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed")
@@ -165,6 +160,51 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 		FailList:    resp.FailList,
 		FailMessage: resp.FailMessage,
 	}, nil
+}
+
+func minimalTradeInfoList(sysTids, tids []string) []TradeInfoItem {
+	out := make([]TradeInfoItem, 0, len(sysTids))
+	for i, sid := range sysTids {
+		sid = strings.TrimSpace(sid)
+		if sid == "" {
+			continue
+		}
+		item := TradeInfoItem{SysTid: sid}
+		if i < len(tids) {
+			item.Tid = strings.TrimSpace(tids[i])
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
+func (s *Session) postSetTradeAgentType(ctx context.Context, ps *PlatformSession, tradeInfoList []TradeInfoItem, agentType int, factoryID string) (*setTradeAgentTypeResponse, error) {
+	body := map[string]any{
+		"tradeInfoList": tradeInfoList,
+		"agentType":     agentType,
+	}
+	if agentType == AgentTypePushFactory {
+		body["factoryId"] = factoryID
+	}
+	var resp setTradeAgentTypeResponse
+	if err := s.client.postPlatform(ctx, ps, "/tradeManage/setTradeAgentType", body, &resp); err != nil {
+		return nil, err
+	}
+	if resp.Result != 0 && resp.Result != ResultSuccess && resp.Result != 100 {
+		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "set trade agent type failed")
+		if len(resp.FailMessage) > 0 {
+			for _, v := range resp.FailMessage {
+				if strings.TrimSpace(v) != "" {
+					msg = v
+					break
+				}
+			}
+		}
+		if len(resp.FailList) > 0 && len(resp.SuccessList) == 0 {
+			return &resp, fmt.Errorf("%s", msg)
+		}
+	}
+	return &resp, nil
 }
 
 type CancelTradePushRequest struct {

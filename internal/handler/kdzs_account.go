@@ -24,6 +24,25 @@ func (h *Handler) ListKdzsAccountDetails(c *gin.Context) {
 	response.OK(c, gin.H{"items": items, "total": len(items)})
 }
 
+func (h *Handler) ExportKdzsAccounts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	items, meta, err := svc.ExportAccountsForSync()
+	if err != nil {
+		response.Fail(c, http.StatusInternalServerError, err.Error())
+		return
+	}
+	response.OK(c, gin.H{
+		"items":              items,
+		"total":              len(items),
+		"defaultAccountCode": meta.DefaultAccountCode,
+		"activeAccountCode":  meta.ActiveAccountCode,
+	})
+}
+
 func (h *Handler) CreateKdzsAccount(c *gin.Context) {
 	svc, err := h.svc(c)
 	if err != nil {

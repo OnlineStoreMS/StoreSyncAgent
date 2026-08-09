@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type tradeDetailRequest struct {
@@ -39,7 +40,8 @@ func (s *Session) FetchTradeDetails(ctx context.Context, platform, tradeStatus s
 		SysTids:     sysTids,
 		TradeStatus: tradeStatus,
 	}
-	if tradeStatus == "wait_audit" {
+	// 待推单详情：电商单可带厂家列表；手工单（DFHAND）自营待推单不应带 factoryUserId，否则详情/自己打单会查不到。
+	if tradeStatus == "wait_audit" && !strings.EqualFold(strings.TrimSpace(platform), PlatformManual) {
 		if factoryIDs, _, err := s.loadQueryContext(ctx, platform); err == nil && len(factoryIDs) > 0 {
 			req.FactoryUserID = factoryIDs
 		}

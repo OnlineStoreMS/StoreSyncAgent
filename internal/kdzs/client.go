@@ -39,6 +39,10 @@ func (c *Client) Token() string {
 	return c.token
 }
 
+func (c *Client) BaseURL() string {
+	return c.baseURL
+}
+
 func (c *Client) get(ctx context.Context, path string, out any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
 	if err != nil {

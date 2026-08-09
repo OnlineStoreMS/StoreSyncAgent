@@ -136,6 +136,57 @@ func (s *SyncService) ListAccountDetails() ([]KdzsAccountDetail, error) {
 	return items, nil
 }
 
+// KdzsAccountExport 供发货中心等内部服务同步账号（含密码）。
+type KdzsAccountExport struct {
+	Code      string `json:"code"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	Mobile    string `json:"mobile"`
+	Password  string `json:"password"`
+	Enabled   bool   `json:"enabled"`
+	SortOrder int    `json:"sortOrder"`
+	IsDefault bool   `json:"isDefault"`
+	Active    bool   `json:"active"`
+}
+
+type TenantKdzsExportMeta struct {
+	DefaultAccountCode string `json:"defaultAccountCode"`
+	ActiveAccountCode  string `json:"activeAccountCode"`
+}
+
+func (s *SyncService) ExportAccountsForSync() ([]KdzsAccountExport, *TenantKdzsExportMeta, error) {
+	if err := s.loadSettings(); err != nil {
+		return nil, nil, err
+	}
+	records, err := s.kdzsRepo.ListAllAccounts(s.tenantID)
+	if err != nil {
+		return nil, nil, err
+	}
+	items := make([]KdzsAccountExport, 0, len(records))
+	for _, rec := range records {
+		items = append(items, KdzsAccountExport{
+			Code:      rec.Code,
+			Name:      rec.Name,
+			Role:      rec.Role,
+			Mobile:    rec.Mobile,
+			Password:  rec.Password,
+			Enabled:   rec.Enabled,
+			SortOrder: rec.SortOrder,
+			IsDefault: s.settings != nil && rec.Code == s.settings.DefaultAccountCode,
+			Active:    rec.Code == s.activeAccountID,
+		})
+	}
+	meta := &TenantKdzsExportMeta{}
+	if s.settings != nil {
+		meta.DefaultAccountCode = s.settings.DefaultAccountCode
+		meta.ActiveAccountCode = s.settings.ActiveAccountCode
+		if meta.ActiveAccountCode == "" {
+			meta.ActiveAccountCode = s.activeAccountID
+		}
+	}
+	return items, meta, nil
+}
+
 func (s *SyncService) CreateKdzsAccount(in KdzsAccountInput) (*KdzsAccountDetail, error) {
 	in.Code = strings.TrimSpace(in.Code)
 	in.Name = strings.TrimSpace(in.Name)

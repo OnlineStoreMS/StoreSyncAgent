@@ -12,6 +12,11 @@ import (
 // ensureLoginDefaultAccount 使用租户「默认」快递助手账号登录（手工建单同步约定）。
 // 优先 settings.DefaultAccountCode；未配置时回退到启用列表第一个。
 func (s *SyncService) ensureLoginDefaultAccount(ctx context.Context) error {
+	return s.ensureLoginAccount(ctx, "")
+}
+
+// ensureLoginAccount 登录指定账号；accountID 为空时走租户默认账号。
+func (s *SyncService) ensureLoginAccount(ctx context.Context, accountID string) error {
 	if err := s.loadSettings(); err != nil {
 		return err
 	}
@@ -24,7 +29,13 @@ func (s *SyncService) ensureLoginDefaultAccount(ctx context.Context) error {
 	}
 	var acc config.KdzsAccount
 	var ok bool
-	if s.settings != nil && strings.TrimSpace(s.settings.DefaultAccountCode) != "" {
+	code := strings.TrimSpace(accountID)
+	if code != "" {
+		acc, ok = s.accountByCode(code)
+		if !ok {
+			return fmt.Errorf("快递助手账号 %s 不可用或已停用", code)
+		}
+	} else if s.settings != nil && strings.TrimSpace(s.settings.DefaultAccountCode) != "" {
 		acc, ok = s.accountByCode(s.settings.DefaultAccountCode)
 		if !ok {
 			return fmt.Errorf("默认快递助手账号不可用或已停用，请在「账号管理」中重新设置默认账号")
@@ -33,7 +44,7 @@ func (s *SyncService) ensureLoginDefaultAccount(ctx context.Context) error {
 		acc = accounts[0]
 	}
 	if strings.TrimSpace(acc.Mobile) == "" || strings.TrimSpace(acc.Password) == "" {
-		return fmt.Errorf("默认快递助手账号缺少手机号或密码")
+		return fmt.Errorf("快递助手账号缺少手机号或密码")
 	}
 	return s.session.SwitchAccount(ctx, acc.ID, acc.Name, acc.Role, acc.Mobile, acc.Password)
 }
@@ -72,6 +83,8 @@ type CreateHandOrderRequest struct {
 	SendInfo       string              `json:"sendInfo"`
 	OrderCode      string              `json:"orderCode"`
 	Type           string              `json:"type"` // 默认 2=待推单
+	// AccountID 指定登录账号（如发货中心默认账号 code）；空则用 SSA 租户默认账号
+	AccountID string `json:"accountId"`
 }
 
 type CreateHandOrderResult struct {
@@ -83,7 +96,7 @@ type CreateHandOrderResult struct {
 }
 
 func (s *SyncService) CreateHandOrder(ctx context.Context, req CreateHandOrderRequest) (*CreateHandOrderResult, error) {
-	if err := s.ensureLoginDefaultAccount(ctx); err != nil {
+	if err := s.ensureLoginAccount(ctx, req.AccountID); err != nil {
 		return nil, err
 	}
 	if strings.TrimSpace(req.Recipient) == "" {
@@ -157,7 +170,7 @@ type BatchCreateHandOrderResult struct {
 }
 
 func (s *SyncService) BatchCreateHandOrder(ctx context.Context, req BatchCreateHandOrderRequest) (*BatchCreateHandOrderResult, error) {
-	if err := s.ensureLoginDefaultAccount(ctx); err != nil {
+	if err := s.ensureLoginAccount(ctx, req.AccountID); err != nil {
 		return nil, err
 	}
 	if len(req.Receivers) == 0 {
