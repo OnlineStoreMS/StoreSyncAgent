@@ -9,7 +9,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 const client: AxiosInstance = axios.create({
-  baseURL: '/api/v1/admin',
+  baseURL: (import.meta.env.BASE_URL || '/') + 'api/v1/admin',
   timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: true,
