@@ -12,6 +12,7 @@ const client: AxiosInstance = axios.create({
   baseURL: '/api/v1/admin',
   timeout: 60000,
   headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
 })
 
 client.interceptors.request.use((config) => {
