@@ -56,7 +56,7 @@ const router = createRouter({
           path: 'products/multi-shop-compare',
           name: 'ProductMultiShopCompare',
           component: () => import('../views/product/ProductMultiShopCompare.vue'),
-          meta: { title: '多店铺同商品比对' },
+          meta: { title: '同商品比对' },
         },
         {
           path: 'factories',

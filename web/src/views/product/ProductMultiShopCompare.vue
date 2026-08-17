@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Rank, RefreshRight, Search } from '@element-plus/icons-vue'
+import { Rank, RefreshRight } from '@element-plus/icons-vue'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { listProducts, type Product } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
@@ -379,12 +379,11 @@ onBeforeUnmount(() => {
       <template #header>
         <div class="row-between">
           <div class="card-title">
-            多店铺同商品比对
+            同商品比对
             <span v-if="selectedShopCount" class="count">（{{ selectedShopCount }} 店）</span>
           </div>
           <div class="actions">
             <el-button :icon="RefreshRight" @click="resetAll">重置</el-button>
-            <el-button type="primary" :icon="Search" :loading="searching" @click="handleSearch">搜索比对</el-button>
           </div>
         </div>
       </template>
