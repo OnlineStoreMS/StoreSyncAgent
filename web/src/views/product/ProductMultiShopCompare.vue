@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Search, RefreshRight } from '@element-plus/icons-vue'
+import { Rank, RefreshRight, Search } from '@element-plus/icons-vue'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
 import { listProducts, type Product } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
 
 const kdzsStore = useKdzsStore()
+const sidebarCollapsed = inject<Ref<boolean>>('sidebarCollapsed', ref(false))
 
 interface ShopColumn {
   shopId: string
@@ -15,6 +16,9 @@ interface ShopColumn {
   platformName: string
   loading: boolean
   error: string
+  /** 远端按「全部状态」拉取后的缓存 */
+  allCandidates: Product[]
+  /** 按当前商品状态筛过的展示列表 */
   candidates: Product[]
   selected: Product | null
   expanded: boolean
@@ -23,7 +27,8 @@ interface ShopColumn {
 const filters = reactive({
   type: '',
   shopIds: [] as string[],
-  keywords: '',
+  /** 多关键字标签（回车添加，支持粘贴空格/逗号串） */
+  keywordTags: [] as string[],
 })
 
 const typeOptions = [
@@ -41,6 +46,10 @@ const platformOptions = [
 const searching = ref(false)
 const searched = ref(false)
 const columns = ref<ShopColumn[]>([])
+const dragFromIndex = ref<number | null>(null)
+const dragOverIndex = ref<number | null>(null)
+/** 当前缓存对应的关键字签名；变更才重新打远端 */
+let cacheKeywordsKey = ''
 let searchSeq = 0
 
 const shopOptions = computed(() =>
@@ -51,6 +60,30 @@ const shopOptions = computed(() =>
 )
 
 const selectedShopCount = computed(() => filters.shopIds.length)
+
+/** 列少时均分铺满；列多时保底宽度并可横向滚动。侧栏收起后主区变宽，flex 列自动变宽。 */
+const columnsWrapClass = computed(() => ({
+  'is-fit': columns.value.length > 0 && columns.value.length <= 5,
+  'is-scroll': columns.value.length > 5,
+  'sidebar-collapsed': sidebarCollapsed.value,
+}))
+
+const columnStyle = computed(() => {
+  const n = columns.value.length || 1
+  if (n <= 5) {
+    return {
+      flex: '1 1 0',
+      minWidth: n <= 2 ? '320px' : n <= 3 ? '280px' : '220px',
+      width: 'auto',
+      maxWidth: '100%',
+    }
+  }
+  return {
+    flex: '0 0 280px',
+    minWidth: '280px',
+    width: '280px',
+  }
+})
 
 function platformLabel(code: string) {
   return platformOptions.find((o) => o.value === code)?.label || code
@@ -64,28 +97,94 @@ function approveTagType(status?: string) {
   return 'info'
 }
 
-/** 解析多关键字：空格 / 逗号 / 中文逗号 / 分号 */
-function parseKeywords(raw: string): string[] {
-  return raw
-    .split(/[\s,，;；]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
+/** 规范化关键字标签：拆分粘贴的「空格/逗号」串并去重 */
+function normalizeKeywordTags(tags: string[]): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const raw of tags) {
+    for (const part of String(raw).split(/[\s,，;；]+/)) {
+      const t = part.trim()
+      if (!t) continue
+      const key = t.toLowerCase()
+      if (seen.has(key)) continue
+      seen.add(key)
+      out.push(t)
+    }
+  }
+  return out
 }
 
-/** 精确：标题/简称/商家编码/商品ID 中同时包含全部关键字（忽略大小写） */
+function activeKeywords(): string[] {
+  return normalizeKeywordTags(filters.keywordTags)
+}
+
+function keywordsCacheKey(keywords: string[] = activeKeywords()): string {
+  return keywords
+    .map((k) => k.toLowerCase())
+    .sort()
+    .join('\u0001')
+}
+
+/** 精确：标题/简称/编码/商品ID/SKU 规格中同时包含全部关键字 */
 function matchExactKeywords(item: Product, keywords: string[]): boolean {
   if (!keywords.length) return true
+  const skuText = (item.skus || [])
+    .map((s) => [s.propertiesName, s.skuId, s.outerId, s.shortTitle].filter(Boolean).join(' '))
+    .join(' ')
   const hay = [
     item.title,
     item.shortTitle,
     item.outerId,
     item.itemId,
     item.productNum,
+    skuText,
   ]
     .filter(Boolean)
     .join(' ')
     .toLowerCase()
   return keywords.every((kw) => hay.includes(kw.toLowerCase()))
+}
+
+function matchStatus(item: Product, type: string): boolean {
+  if (!type) return true
+  const s = (item.approveStatus || '').toLowerCase().replace(/-/g, '_')
+  if (type === 'onsale') return s === 'onsale' || s === 'on_sale'
+  if (type === 'instock') return s === 'instock' || s === 'in_stock'
+  return true
+}
+
+function filterByType(items: Product[]): Product[] {
+  return items.filter((p) => matchStatus(p, filters.type))
+}
+
+function applyTypeFilter(col: ShopColumn) {
+  col.candidates = filterByType(col.allCandidates)
+  if (col.selected) {
+    const still = col.candidates.find((p) => p.itemId === col.selected?.itemId)
+    if (!still) {
+      col.selected = col.candidates.length === 1 ? col.candidates[0] : null
+    } else {
+      col.selected = still
+    }
+  } else if (col.candidates.length === 1) {
+    col.selected = col.candidates[0]
+  }
+}
+
+function canSearch(): boolean {
+  return filters.shopIds.length > 0 && activeKeywords().length > 0
+}
+
+/** 状态切换：只从本地缓存筛选，不打远端 */
+function onTypeChange() {
+  if (!searched.value) return
+  for (const col of columns.value) {
+    applyTypeFilter(col)
+  }
+}
+
+function onKeywordTagsChange(val: string[]) {
+  filters.keywordTags = normalizeKeywordTags(val || [])
 }
 
 function shopMeta(shopId: string) {
@@ -99,14 +198,17 @@ function shopMeta(shopId: string) {
 }
 
 async function fetchShopCandidates(shopId: string, platform: string, keywords: string[]): Promise<Product[]> {
-  const primary = keywords[0] || undefined
+  // 始终按「全部状态」拉取，状态筛选项只做本地缓存过滤
+  const primary =
+    keywords.length <= 1
+      ? keywords[0]
+      : [...keywords].sort((a, b) => a.length - b.length)[0]
   const data = await listProducts({
     platform: platform || undefined,
     shopId,
-    type: filters.type || undefined,
-    title: primary,
+    title: primary || undefined,
     pageNo: 1,
-    pageSize: 50,
+    pageSize: 100,
   })
   const items = data.items || []
   if (!keywords.length) return items
@@ -114,46 +216,71 @@ async function fetchShopCandidates(shopId: string, platform: string, keywords: s
 }
 
 async function handleSearch() {
+  filters.keywordTags = normalizeKeywordTags(filters.keywordTags)
   if (!filters.shopIds.length) {
     ElMessage.warning('请先选择要比对的店铺')
     return
   }
-  const keywords = parseKeywords(filters.keywords)
+  const keywords = activeKeywords()
   if (!keywords.length) {
-    ElMessage.warning('请输入至少一个搜索关键字')
+    ElMessage.warning('请输入至少一个搜索关键字（回车添加，可多个）')
     return
   }
 
   const seq = ++searchSeq
+  const nextKey = keywordsCacheKey(keywords)
+  const keywordsChanged = nextKey !== cacheKeywordsKey
   searching.value = true
   searched.value = true
 
-  columns.value = filters.shopIds.map((id) => {
+  // 保留已有列顺序（拖动后），仅补全新选店铺
+  const prevById = new Map(columns.value.map((c) => [c.shopId, c]))
+  const orderedIds = [
+    ...columns.value.map((c) => c.shopId).filter((id) => filters.shopIds.includes(id)),
+    ...filters.shopIds.filter((id) => !prevById.has(id)),
+  ]
+
+  columns.value = orderedIds.map((id) => {
     const meta = shopMeta(id)
+    const prev = prevById.get(id)
+    const canReuse = !keywordsChanged && !!prev && prev.allCandidates.length >= 0 && !prev.error
     return {
       ...meta,
-      loading: true,
-      error: '',
+      loading: !canReuse,
+      error: canReuse ? '' : '',
+      allCandidates: canReuse ? prev!.allCandidates : [],
       candidates: [],
-      selected: null,
-      expanded: true,
+      selected: prev?.selected && prev.selected.itemId ? prev.selected : null,
+      expanded: prev?.expanded ?? true,
     }
   })
 
+  // 关键字未变：已有缓存的列只做状态筛选；新店铺或缺缓存的才请求
   await Promise.all(
     columns.value.map(async (col) => {
+      const prev = prevById.get(col.shopId)
+      const canReuse = !keywordsChanged && !!prev && !prev.error && Array.isArray(prev.allCandidates)
+      if (canReuse) {
+        col.allCandidates = prev!.allCandidates
+        applyTypeFilter(col)
+        col.loading = false
+        return
+      }
       try {
         const list = await fetchShopCandidates(col.shopId, col.platform, keywords)
         if (seq !== searchSeq) return
-        col.candidates = list
-        // 唯一命中时自动选定，便于直接展开比对
-        if (list.length === 1) {
-          col.selected = list[0]
+        col.allCandidates = list
+        col.error = ''
+        applyTypeFilter(col)
+        if (!col.selected && col.candidates.length === 1) {
+          col.selected = col.candidates[0]
         }
       } catch (e: any) {
         if (seq !== searchSeq) return
         col.error = e?.response?.data?.error || e.message || '加载失败'
+        col.allCandidates = []
         col.candidates = []
+        col.selected = null
       } finally {
         if (seq === searchSeq) col.loading = false
       }
@@ -161,10 +288,11 @@ async function handleSearch() {
   )
 
   if (seq === searchSeq) {
+    cacheKeywordsKey = nextKey
     searching.value = false
     const hitShops = columns.value.filter((c) => c.candidates.length > 0).length
     if (!hitShops) {
-      ElMessage.warning('各店铺均未找到匹配商品，请调整关键字')
+      ElMessage.warning('各店铺均未找到匹配商品，请调整关键字或状态')
     }
   }
 }
@@ -178,19 +306,58 @@ function clearSelection(col: ShopColumn) {
   col.selected = null
 }
 
+function syncShopIdsOrder() {
+  filters.shopIds = columns.value.map((c) => c.shopId)
+}
+
+function onColumnDragStart(index: number, e: DragEvent) {
+  dragFromIndex.value = index
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+  }
+}
+
+function onColumnDragOver(index: number, e: DragEvent) {
+  e.preventDefault()
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+function onColumnDrop(index: number, e: DragEvent) {
+  e.preventDefault()
+  const from = dragFromIndex.value
+  dragFromIndex.value = null
+  dragOverIndex.value = null
+  if (from == null || from === index) return
+  const list = [...columns.value]
+  const [moved] = list.splice(from, 1)
+  list.splice(index, 0, moved)
+  columns.value = list
+  syncShopIdsOrder()
+}
+
+function onColumnDragEnd() {
+  dragFromIndex.value = null
+  dragOverIndex.value = null
+}
+
 function resetAll() {
   filters.type = ''
   filters.shopIds = []
-  filters.keywords = ''
+  filters.keywordTags = []
   columns.value = []
   searched.value = false
   searching.value = false
+  cacheKeywordsKey = ''
   searchSeq++
 }
 
 function refreshPage() {
   void kdzsStore.loadShops()
+  // 账号切换后缓存可能失效，强制按关键字重新拉
   if (searched.value && filters.shopIds.length) {
+    cacheKeywordsKey = ''
     void handleSearch()
   }
 }
@@ -207,7 +374,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="compare-page">
+  <div class="compare-page" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
     <el-card shadow="never" class="page-card">
       <template #header>
         <div class="row-between">
@@ -225,7 +392,7 @@ onBeforeUnmount(() => {
       <div class="filter-panel">
         <div class="filter-row">
           <span class="filter-label">商品状态</span>
-          <el-radio-group v-model="filters.type">
+          <el-radio-group v-model="filters.type" @change="onTypeChange">
             <el-radio-button v-for="opt in typeOptions" :key="opt.value || 'all'" :label="opt.value">
               {{ opt.label }}
             </el-radio-button>
@@ -254,18 +421,24 @@ onBeforeUnmount(() => {
         <div class="filter-row">
           <span class="filter-label">快速搜索</span>
           <div class="filters">
-            <el-input
-              v-model="filters.keywords"
+            <el-select
+              v-model="filters.keywordTags"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              collapse-tags-tooltip
               clearable
-              placeholder="精确关键字，支持多个（空格 / 逗号分隔），需同时命中"
+              placeholder="输入关键字后回车添加，可多个；需同时命中"
               style="width: min(520px, 100%)"
-              @keyup.enter="handleSearch"
+              @change="onKeywordTagsChange"
             />
             <el-button type="primary" :loading="searching" @click="handleSearch">查询</el-button>
           </div>
         </div>
         <div class="filter-hint muted">
-          每个店铺一列；搜索后在列内选定同一款商品，展开即可横向比对图片、规格、SKU ID、价格、库存。
+          首次按全部状态拉取并缓存；切换上架/下架仅本地筛选。关键字变更后才会重新查询。
         </div>
       </div>
 
@@ -275,13 +448,24 @@ onBeforeUnmount(() => {
         :image-size="80"
       />
 
-      <div v-else class="columns-wrap" v-loading="searching">
+      <div v-else class="columns-wrap" :class="columnsWrapClass" v-loading="searching">
         <div
-          v-for="col in columns"
+          v-for="(col, index) in columns"
           :key="col.shopId"
           class="shop-column"
+          :class="{
+            'is-dragging': dragFromIndex === index,
+            'is-drag-over': dragOverIndex === index && dragFromIndex !== index,
+          }"
+          :style="columnStyle"
+          draggable="true"
+          @dragstart="onColumnDragStart(index, $event)"
+          @dragover="onColumnDragOver(index, $event)"
+          @drop="onColumnDrop(index, $event)"
+          @dragend="onColumnDragEnd"
         >
-          <div class="col-header">
+          <div class="col-header" title="拖动调整列顺序">
+            <el-icon class="drag-handle"><Rank /></el-icon>
             <div class="shop-name" :title="col.shopName">{{ col.shopName }}</div>
             <el-tag size="small" type="info">{{ col.platformName || platformLabel(col.platform) }}</el-tag>
           </div>
@@ -400,6 +584,15 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.compare-page {
+  min-width: 0;
+}
+.page-card {
+  min-width: 0;
+}
+.page-card :deep(.el-card__body) {
+  min-width: 0;
+}
 .row-between {
   display: flex;
   justify-content: space-between;
@@ -462,31 +655,51 @@ onBeforeUnmount(() => {
 }
 .columns-wrap {
   display: flex;
-  gap: 16px;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
   overflow-x: auto;
   padding-bottom: 8px;
   min-height: 320px;
-  align-items: flex-start;
+  align-items: stretch;
+}
+.columns-wrap.is-fit {
+  overflow-x: hidden;
 }
 .shop-column {
-  flex: 0 0 380px;
-  width: 380px;
   border: 1px solid #ebeef5;
   border-radius: 8px;
   background: #fff;
   display: flex;
   flex-direction: column;
   max-height: calc(100vh - 280px);
+  min-width: 0;
+  transition: box-shadow 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.shop-column.is-dragging {
+  opacity: 0.55;
+}
+.shop-column.is-drag-over {
+  border-color: #409eff;
+  box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.25);
 }
 .col-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 12px 14px;
   border-bottom: 1px solid #ebeef5;
   background: #f8fafc;
   border-radius: 8px 8px 0 0;
+  cursor: grab;
+  user-select: none;
+}
+.col-header:active {
+  cursor: grabbing;
+}
+.drag-handle {
+  color: #909399;
+  flex-shrink: 0;
 }
 .shop-name {
   font-weight: 600;
@@ -494,11 +707,14 @@ onBeforeUnmount(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .col-body {
   padding: 12px;
   overflow-y: auto;
   flex: 1;
+  min-width: 0;
 }
 .cand-meta {
   font-size: 13px;
@@ -572,6 +788,8 @@ onBeforeUnmount(() => {
 .sku-panel {
   border-top: 1px dashed #e4e7ed;
   padding-top: 10px;
+  min-width: 0;
+  overflow-x: auto;
 }
 .sku-thumb {
   width: 40px;

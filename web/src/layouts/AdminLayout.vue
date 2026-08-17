@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, provide, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ArrowDown, Expand, Fold, Refresh } from '@element-plus/icons-vue'
 import Sidebar from './Sidebar.vue'
@@ -13,6 +13,8 @@ const route = useRoute()
 const collapsed = ref(false)
 const sessionStore = useSessionStore()
 const kdzsStore = useKdzsStore()
+
+provide('sidebarCollapsed', collapsed)
 
 const userInitial = computed(() => {
   const name = sessionStore.session?.user.displayName?.trim()
