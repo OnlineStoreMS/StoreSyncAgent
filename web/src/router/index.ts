@@ -53,6 +53,12 @@ const router = createRouter({
           meta: { title: '库存预警' },
         },
         {
+          path: 'products/multi-shop-compare',
+          name: 'ProductMultiShopCompare',
+          component: () => import('../views/product/ProductMultiShopCompare.vue'),
+          meta: { title: '多店铺同商品比对' },
+        },
+        {
           path: 'factories',
           name: 'FactoryList',
           component: () => import('../views/factory/FactoryList.vue'),

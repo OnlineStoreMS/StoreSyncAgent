@@ -19,6 +19,7 @@ const menuItems = [
 
 const productItems = [
   { path: '/products', title: '商品列表' },
+  { path: '/products/multi-shop-compare', title: '多店铺同商品比对' },
   { path: '/products/stock-alerts', title: '库存预警' },
 ]
 
