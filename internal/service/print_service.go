@@ -37,15 +37,14 @@ func (s *SyncService) ListElecAuth(ctx context.Context) ([]kdzs.ElecAuthRecord, 
 	return s.client.ListElecAuth(ctx)
 }
 
-func (s *SyncService) ListExpressTemplates(ctx context.Context) ([]kdzs.ExpressTemplate, error) {
+func (s *SyncService) ListExpressTemplates(ctx context.Context) ([]kdzs.ExpressTemplate, bool, error) {
 	if err := s.ensureLogin(ctx); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	userID := strings.TrimSpace(s.session.UserID())
-	if userID == "" {
-		return nil, fmt.Errorf("missing user id after login")
+	if strings.TrimSpace(s.session.UserID()) == "" {
+		return nil, false, fmt.Errorf("missing user id after login")
 	}
-	return s.client.ListExpressTemplates(ctx, userID)
+	return s.session.ListPrintExpressTemplates(ctx)
 }
 
 func (s *SyncService) ListSharedExpressAccounts(ctx context.Context, platform string) ([]kdzs.SharedExpressAccount, error) {

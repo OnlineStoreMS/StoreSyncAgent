@@ -29,12 +29,12 @@ func (h *Handler) ListExpressTemplates(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	items, err := svc.ListExpressTemplates(c.Request.Context())
+	items, complete, err := svc.ListExpressTemplates(c.Request.Context())
 	if err != nil {
 		response.Fail(c, http.StatusBadGateway, err.Error())
 		return
 	}
-	response.OK(c, gin.H{"items": items, "total": len(items)})
+	response.OK(c, gin.H{"items": items, "total": len(items), "complete": complete})
 }
 
 func (h *Handler) GetBatchPrintURL(c *gin.Context) {
