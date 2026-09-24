@@ -154,6 +154,8 @@ func AfterSaleStatusLabel(status string) string {
 		return "待卖家确认收货"
 	case "REFUND_SUCCESS":
 		return "退款成功"
+	case "REFUND_MONEY_FINISH", "REFUND_MONEY_SUCCESS", "REFUNDED", "SUCCESS_REFUND":
+		return "退款完成"
 	case "REFUND_CLOSE":
 		return "售后关闭"
 	case "SELLER_REFUSAL_REFUND":
