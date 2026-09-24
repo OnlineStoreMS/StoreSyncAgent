@@ -81,14 +81,17 @@ type TradeLogistics struct {
 }
 
 type TradeGoods struct {
-	Title   string  `json:"title,omitempty"`
-	SkuName string  `json:"skuName,omitempty"`
-	PicURL  string  `json:"picUrl,omitempty"`
-	Num     int     `json:"num,omitempty"`
-	OuterID string  `json:"outerId,omitempty"`
-	SkuID   string  `json:"skuId,omitempty"`  // 平台 SKU ID
-	ItemID  string  `json:"itemId,omitempty"` // 平台商品/货品 ID
-	Price   float64 `json:"price,omitempty"`
+	Title               string  `json:"title,omitempty"`
+	SkuName             string  `json:"skuName,omitempty"`
+	PicURL              string  `json:"picUrl,omitempty"`
+	Num                 int     `json:"num,omitempty"`
+	OuterID             string  `json:"outerId,omitempty"`
+	SkuID               string  `json:"skuId,omitempty"`  // 平台 SKU ID
+	ItemID              string  `json:"itemId,omitempty"` // 平台商品/货品 ID
+	Price               float64 `json:"price,omitempty"`
+	AfterSaleStatus     string  `json:"afterSaleStatus,omitempty"`
+	AfterSaleStatusText string  `json:"afterSaleStatusText,omitempty"`
+	OrderStatus         string  `json:"orderStatus,omitempty"` // 行级电商状态（部分退时已关闭行）
 }
 
 type tradeListRequest struct {
@@ -548,17 +551,7 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 			if tid := asString(order["oid"], order["relationTid"], order["tid"]); tid != "" {
 				item.Tids = appendUnique(item.Tids, tid)
 			}
-			item.Goods = append(item.Goods, TradeGoods{
-				Title:   asString(order["title"], order["itemTitle"], order["goodsName"]),
-				SkuName: asString(order["skuName"], order["colorName"], order["skuPropertiesName"]),
-				PicURL:  asString(order["picUrl"], order["skuPicUrl"], order["picPath"], order["itemPic"]),
-				Num:     asInt(order["num"], order["buyNum"]),
-				OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
-				SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
-				ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
-				// price=商品价/商家侧；payment=用户实付（可能已扣券），明细单价用 price
-				Price: asFloat(order["price"], order["totalFee"], order["payment"]),
-			})
+			item.Goods = append(item.Goods, parseTradeGoods(order))
 			mergeAfterSaleFromOrder(item, order)
 		}
 		if item.PlatformOrderStatus == "" {
@@ -615,16 +608,7 @@ func parseTradeItemLegacyTrades(item *TradeListItem, trades []any) *TradeListIte
 				if order == nil {
 					continue
 				}
-				item.Goods = append(item.Goods, TradeGoods{
-					Title:   asString(order["title"], order["itemTitle"], order["goodsName"]),
-					SkuName: asString(order["skuPropertiesName"], order["skuName"]),
-					PicURL:  asString(order["picUrl"], order["skuPicUrl"], order["picPath"], order["itemPic"]),
-					Num:     asInt(order["num"], order["buyNum"]),
-					OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
-					SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
-					ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
-					Price:   asFloat(order["price"], order["totalFee"], order["payment"]),
-				})
+				item.Goods = append(item.Goods, parseTradeGoods(order))
 			}
 		}
 	}
@@ -873,6 +857,49 @@ func mergeAfterSaleFromOrder(item *TradeListItem, order map[string]any) {
 	if plat := asString(order["orderStatus"], order["platformOrderStatus"]); plat != "" && item.PlatformOrderStatus == "" {
 		item.PlatformOrderStatus = plat
 	}
+}
+
+func parseTradeGoods(order map[string]any) TradeGoods {
+	as := asString(order["afterSaleStatus"], order["refundStatus"])
+	return TradeGoods{
+		Title:   asString(order["title"], order["itemTitle"], order["goodsName"]),
+		SkuName: asString(order["skuName"], order["colorName"], order["skuPropertiesName"]),
+		PicURL:  asString(order["picUrl"], order["skuPicUrl"], order["picPath"], order["itemPic"]),
+		Num:     asInt(order["num"], order["buyNum"]),
+		OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
+		SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
+		ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
+		// price=商品价/商家侧；payment=用户实付（可能已扣券），明细单价用 price
+		Price:               asFloat(order["price"], order["totalFee"], order["payment"]),
+		AfterSaleStatus:     as,
+		AfterSaleStatusText: firstNonEmpty(asString(order["afterSaleStatusText"], order["refundStatusDesc"]), AfterSaleStatusLabel(as)),
+		OrderStatus:         asString(order["orderStatus"], order["platformOrderStatus"], order["itemStatus"], order["subStatus"], order["status"]),
+	}
+}
+
+// GoodsLineExcludedFromFulfillment 行已退款完成或交易关闭时，待发货界面不应再展示/履约。
+func GoodsLineExcludedFromFulfillment(g TradeGoods) bool {
+	if g.Num <= 0 {
+		return true
+	}
+	as := strings.ToUpper(strings.TrimSpace(g.AfterSaleStatus))
+	switch as {
+	case "REFUND_SUCCESS", "REFUNDED", "SUCCESS_REFUND", "REFUND_MONEY_FINISH", "REFUND_MONEY_SUCCESS":
+		return true
+	}
+	if strings.Contains(as, "REFUND") && (strings.Contains(as, "SUCCESS") || strings.Contains(as, "FINISH") || strings.Contains(as, "DONE")) {
+		return true
+	}
+	os := strings.ToUpper(strings.TrimSpace(g.OrderStatus))
+	switch os {
+	case "TRADE_CLOSED", "ORDER_CANCEL", "ORDER_CANCELLED", "CANCEL", "CANCELLED", "CLOSED",
+		"TRADE_CLOSED_BY_TAOBAO", "TRADE_CLOSED_BY_USER", "REFUND_SUCCESS", "REFUNDED":
+		return true
+	}
+	if strings.Contains(os, "CANCEL") || strings.HasSuffix(os, "_CLOSED") {
+		return true
+	}
+	return false
 }
 
 func afterSalePriority(status string) int {

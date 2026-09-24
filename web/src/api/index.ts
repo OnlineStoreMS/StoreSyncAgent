@@ -20,6 +20,9 @@ export interface TradeGoods {
   skuId?: string
   itemId?: string
   price?: number
+  afterSaleStatus?: string
+  afterSaleStatusText?: string
+  orderStatus?: string
 }
 
 export interface Order {
