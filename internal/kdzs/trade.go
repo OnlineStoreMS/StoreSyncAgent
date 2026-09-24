@@ -543,13 +543,20 @@ func parseTradeItem(raw json.RawMessage, platform string) *TradeListItem {
 		if sysTid := asString(pkg["sysTid"]); sysTid != "" {
 			item.SysTids = appendUnique(item.SysTids, sysTid)
 		}
+		// 主单号优先（抖店/快递助手展示的「平台单号」= tid），子单 oid 后置便于检索
+		if parent := asString(pkg["tid"], pkg["parentTid"], pkg["relationTid"]); parent != "" {
+			item.Tids = appendUnique(item.Tids, parent)
+		}
 		for _, o := range orderDetails {
 			order, _ := o.(map[string]any)
 			if order == nil {
 				continue
 			}
-			if tid := asString(order["oid"], order["relationTid"], order["tid"]); tid != "" {
-				item.Tids = appendUnique(item.Tids, tid)
+			if lineTid := asString(order["tid"], order["relationTid"]); lineTid != "" {
+				item.Tids = appendUnique(item.Tids, lineTid)
+			}
+			if oid := asString(order["oid"]); oid != "" {
+				item.Tids = appendUnique(item.Tids, oid)
 			}
 			item.Goods = append(item.Goods, parseTradeGoods(order))
 			mergeAfterSaleFromOrder(item, order)

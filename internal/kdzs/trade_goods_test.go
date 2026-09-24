@@ -27,6 +27,22 @@ func TestParseTradeGoodsCapturesLineAfterSale(t *testing.T) {
 	if GoodsLineExcludedFromFulfillment(item.Goods[1]) {
 		t.Fatalf("active line should keep: %+v", item.Goods[1])
 	}
+	// 平台单号应是主单 tid，而不是子单 oid
+	if len(item.Tids) < 1 || item.Tids[0] != "t-main" {
+		t.Fatalf("tids=%v want parent first", item.Tids)
+	}
+	if !containsStr(item.Tids, "a") || !containsStr(item.Tids, "b") {
+		t.Fatalf("oids should still be searchable in tids=%v", item.Tids)
+	}
+}
+
+func containsStr(list []string, v string) bool {
+	for _, s := range list {
+		if s == v {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGoodsLineExcludedFromFulfillment(t *testing.T) {
