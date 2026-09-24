@@ -52,6 +52,8 @@ func TestGoodsLineExcludedFromFulfillment(t *testing.T) {
 	}{
 		{TradeGoods{Num: 1, AfterSaleStatus: "REFUND_SUCCESS"}, true},
 		{TradeGoods{Num: 1, OrderStatus: "TRADE_CLOSED"}, true},
+		{TradeGoods{Num: 1, AfterSaleStatus: "REFUND_MONEY_FINISH"}, true},
+		{TradeGoods{Num: 1, OrderStatus: "ORDER_CANCELLED"}, true},
 		{TradeGoods{Num: 0, AfterSaleStatus: ""}, true},
 		{TradeGoods{Num: 1, AfterSaleStatus: "WAIT_SELLER_AGREE"}, false},
 		{TradeGoods{Num: 1, AfterSaleStatus: "REFUND_MONEY_NONE", OrderStatus: "ORDER_PAID"}, false},
@@ -60,5 +62,25 @@ func TestGoodsLineExcludedFromFulfillment(t *testing.T) {
 		if got := GoodsLineExcludedFromFulfillment(c.g); got != c.want {
 			t.Fatalf("case %d got %v want %v (%+v)", i, got, c.want, c.g)
 		}
+	}
+}
+
+func TestParseRefundMoneyFinishFromRefundStatus(t *testing.T) {
+	raw := json.RawMessage(`{
+		"sysTid":"s2","tid":"parent-tid",
+		"orderDetails":[{"oid":"child","skuName":"曲柄","num":1,"price":1,"orderStatus":"ORDER_CANCELLED","refundStatus":"REFUND_MONEY_FINISH"}]
+	}`)
+	item := ParseTradeItemFromJSON(raw, "FXG")
+	if item == nil || len(item.Goods) != 1 {
+		t.Fatalf("%+v", item)
+	}
+	if item.Goods[0].AfterSaleStatus != "REFUND_MONEY_FINISH" {
+		t.Fatalf("afterSale=%q", item.Goods[0].AfterSaleStatus)
+	}
+	if !GoodsLineExcludedFromFulfillment(item.Goods[0]) {
+		t.Fatalf("should exclude %+v", item.Goods[0])
+	}
+	if item.Tids[0] != "parent-tid" {
+		t.Fatalf("tids=%v", item.Tids)
 	}
 }
