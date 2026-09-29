@@ -970,6 +970,8 @@ type SetOrderAgentTypeRequest struct {
 	FactoryID   string   `json:"factoryId"`
 	SysTids     []string `json:"sysTids"`
 	Tids        []string `json:"tids"` // 可选，与 sysTids 对齐；手工单兜底用
+	OidList     []string `json:"oidList,omitempty"`
+	Split       bool     `json:"split,omitempty"`
 }
 
 func (s *SyncService) SetOrderAgentType(ctx context.Context, req SetOrderAgentTypeRequest) (*kdzs.AgentTypeResult, error) {
@@ -998,6 +1000,8 @@ func (s *SyncService) SetOrderAgentType(ctx context.Context, req SetOrderAgentTy
 		FactoryID:   req.FactoryID,
 		SysTids:     req.SysTids,
 		Tids:        req.Tids,
+		OidList:     req.OidList,
+		Split:       req.Split,
 	})
 }
 

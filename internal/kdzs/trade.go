@@ -88,6 +88,7 @@ type TradeGoods struct {
 	OuterID             string  `json:"outerId,omitempty"`
 	SkuID               string  `json:"skuId,omitempty"`  // 平台 SKU ID
 	ItemID              string  `json:"itemId,omitempty"` // 平台商品/货品 ID
+	Oid                 string  `json:"oid,omitempty"`    // 子单号（抖店 oid）
 	Price               float64 `json:"price,omitempty"`
 	AfterSaleStatus     string  `json:"afterSaleStatus,omitempty"`
 	AfterSaleStatusText string  `json:"afterSaleStatusText,omitempty"`
@@ -876,6 +877,7 @@ func parseTradeGoods(order map[string]any) TradeGoods {
 		OuterID: asString(order["outerId"], order["skuOuterId"], order["outerIid"], order["outerSkuId"]),
 		SkuID:   asString(order["skuId"], order["sku_id"], order["platformSkuId"]),
 		ItemID:  asString(order["itemId"], order["numIid"], order["productId"], order["item_id"], order["goodsId"]),
+		Oid:     asString(order["oid"], order["orderId"], order["subOrderId"]),
 		// price=商品价/商家侧；payment=用户实付（可能已扣券），明细单价用 price
 		Price:               asFloat(order["price"], order["totalFee"], order["payment"]),
 		AfterSaleStatus:     as,

@@ -30,6 +30,9 @@ type SetTradeAgentTypeRequest struct {
 	SysTids     []string
 	// Tids 与 SysTids 对齐的平台单号（手工单 DFHAND 详情缺失时用于兜底拼 tradeInfo）
 	Tids []string
+	// OidList 非空时仅推这些子单，并置 Split（商品级拆包）
+	OidList []string
+	Split   bool
 }
 
 type AgentTypeResult struct {
@@ -123,6 +126,7 @@ func (s *Session) SetTradeAgentType(ctx context.Context, req SetTradeAgentTypeRe
 	if len(tradeInfoList) == 0 {
 		return nil, fmt.Errorf("no trade info built")
 	}
+	tradeInfoList = applyOidSplitFilter(tradeInfoList, req.OidList, req.Split)
 
 	ps, err := s.PlatformSession(ctx, req.Platform)
 	if err != nil {
@@ -174,6 +178,49 @@ func minimalTradeInfoList(sysTids, tids []string) []TradeInfoItem {
 			item.Tid = strings.TrimSpace(tids[i])
 		}
 		out = append(out, item)
+	}
+	return out
+}
+
+// applyOidSplitFilter 商品级拆包：按 oid 子集裁剪 tradeInfo，并标记 split。
+func applyOidSplitFilter(list []TradeInfoItem, oidList []string, forceSplit bool) []TradeInfoItem {
+	want := map[string]struct{}{}
+	for _, oid := range oidList {
+		oid = strings.TrimSpace(oid)
+		if oid != "" {
+			want[oid] = struct{}{}
+		}
+	}
+	if len(want) == 0 && !forceSplit {
+		return list
+	}
+	out := make([]TradeInfoItem, 0, len(list))
+	for _, item := range list {
+		if len(want) == 0 {
+			item.Split = item.Split || forceSplit
+			out = append(out, item)
+			continue
+		}
+		filtered := make([]string, 0, len(item.OidList))
+		for _, oid := range item.OidList {
+			if _, ok := want[strings.TrimSpace(oid)]; ok {
+				filtered = append(filtered, oid)
+			}
+		}
+		if len(filtered) == 0 && len(item.OidList) > 0 {
+			// 详情有 oid 但无交集：跳过该包，避免误推整包
+			continue
+		}
+		if len(filtered) > 0 {
+			item.OidList = filtered
+			item.Split = true
+		} else if forceSplit {
+			item.Split = true
+		}
+		out = append(out, item)
+	}
+	if len(out) == 0 {
+		return list
 	}
 	return out
 }
