@@ -117,7 +117,7 @@ type tradeListRequest struct {
 }
 
 type tradeListResponse struct {
-	Result       int               `json:"result"`
+	Result       json.RawMessage   `json:"result"` // KDZS 限流时可能返回字符串 "811"
 	Message      string            `json:"message"`
 	ErrorMessage string            `json:"errorMessage"`
 	Data         []json.RawMessage `json:"data"`
@@ -200,7 +200,15 @@ func (s *Session) QueryTrades(ctx context.Context, q TradeQuery) (*TradeListResu
 	if err := s.client.postPlatform(ctx, ps, "/tradeManage/queryRdsTradeList", body, &resp); err != nil {
 		return nil, err
 	}
-	if resp.Result != 0 && resp.Result != ResultSuccess {
+	code, err := parseFlexibleResult(resp.Result)
+	if err != nil {
+		return nil, fmt.Errorf("parse trade list result: %w", err)
+	}
+	if code == ResultRateLimit {
+		msg := firstNonEmpty(resp.Message, resp.ErrorMessage, "订单查询过于频繁")
+		return nil, fmt.Errorf("811: %s", msg)
+	}
+	if code != 0 && code != ResultSuccess {
 		return nil, fmt.Errorf("%s", firstNonEmpty(resp.Message, resp.ErrorMessage, "query trades failed"))
 	}
 
