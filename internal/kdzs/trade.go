@@ -343,15 +343,30 @@ func (s *Session) buildTradeListRequest(ctx context.Context, q TradeQuery) (trad
 
 func (s *Session) platformShopIDs(ctx context.Context, platform string) ([]string, error) {
 	platform = strings.ToUpper(strings.TrimSpace(platform))
-	// 手工单无电商店铺绑定：优先 mall/list，其次用登录 userId 作为 shopIds
+	// 手工单履约归属登录 userId（ownerShopId），mall/list 多为面单/渠道店铺，不能单独用来筛单。
 	if platform == PlatformManual {
-		if _, mallIDs, err := s.LoadQueryContext(ctx, platform); err == nil && len(mallIDs) > 0 {
-			return mallIDs, nil
-		}
+		out := make([]string, 0, 4)
 		if uid := strings.TrimSpace(s.UserID()); uid != "" {
-			return []string{uid}, nil
+			out = append(out, uid)
 		}
-		return nil, nil
+		if _, mallIDs, err := s.LoadQueryContext(ctx, platform); err == nil {
+			seen := map[string]struct{}{}
+			for _, id := range out {
+				seen[id] = struct{}{}
+			}
+			for _, id := range mallIDs {
+				id = strings.TrimSpace(id)
+				if id == "" {
+					continue
+				}
+				if _, ok := seen[id]; ok {
+					continue
+				}
+				seen[id] = struct{}{}
+				out = append(out, id)
+			}
+		}
+		return out, nil
 	}
 	shops, err := s.client.ListEcommerceShops(ctx)
 	if err != nil {
