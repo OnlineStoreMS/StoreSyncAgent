@@ -89,6 +89,14 @@ function platformLabel(code: string) {
   return platformOptions.find((o) => o.value === code)?.label || code
 }
 
+function skuCount(item?: Product | null) {
+  return item?.skus?.length ?? 0
+}
+
+function isZeroStock(value?: number | null) {
+  return value === 0
+}
+
 function approveTagType(status?: string) {
   const s = (status || '').toLowerCase()
   if (s === 'onsale' || s === 'on_sale') return 'success'
@@ -457,13 +465,16 @@ onBeforeUnmount(() => {
             'is-drag-over': dragOverIndex === index && dragFromIndex !== index,
           }"
           :style="columnStyle"
-          draggable="true"
-          @dragstart="onColumnDragStart(index, $event)"
           @dragover="onColumnDragOver(index, $event)"
           @drop="onColumnDrop(index, $event)"
           @dragend="onColumnDragEnd"
         >
-          <div class="col-header" title="拖动调整列顺序">
+          <div
+            class="col-header"
+            title="拖动调整列顺序"
+            draggable="true"
+            @dragstart="onColumnDragStart(index, $event)"
+          >
             <el-icon class="drag-handle"><Rank /></el-icon>
             <div class="shop-name" :title="col.shopName">{{ col.shopName }}</div>
             <el-tag size="small" type="info">{{ col.platformName || platformLabel(col.platform) }}</el-tag>
@@ -503,7 +514,8 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="cand-stats">
                   <span>¥{{ p.price || '-' }}</span>
-                  <span>库存 {{ p.stock ?? '-' }}</span>
+                  <span>SKU {{ skuCount(p) }}</span>
+                  <span :class="{ 'stock-zero': isZeroStock(p.stock) }">库存 {{ p.stock ?? '-' }}</span>
                   <el-tag :type="approveTagType(p.approveStatus)" size="small">
                     {{ p.approveStatusLabel || p.approveStatus || '-' }}
                   </el-tag>
@@ -531,14 +543,15 @@ onBeforeUnmount(() => {
                 </div>
                 <div class="cand-stats">
                   <span>¥{{ col.selected.price || '-' }}</span>
-                  <span>库存 {{ col.selected.stock ?? '-' }}</span>
+                  <span>SKU {{ skuCount(col.selected) }}</span>
+                  <span :class="{ 'stock-zero': isZeroStock(col.selected.stock) }">库存 {{ col.selected.stock ?? '-' }}</span>
                   <el-tag :type="approveTagType(col.selected.approveStatus)" size="small">
                     {{ col.selected.approveStatusLabel || col.selected.approveStatus || '-' }}
                   </el-tag>
                 </div>
                 <div class="selected-actions">
                   <el-button link type="primary" @click="col.expanded = !col.expanded">
-                    {{ col.expanded ? '收起 SKU' : '展开 SKU' }}
+                    {{ col.expanded ? '收起 SKU' : '展开 SKU' }}（{{ skuCount(col.selected) }}）
                   </el-button>
                   <el-button link @click="clearSelection(col)">重选</el-button>
                 </div>
@@ -570,7 +583,11 @@ onBeforeUnmount(() => {
                 </el-table-column>
                 <el-table-column prop="propertiesName" label="规格" min-width="120" show-overflow-tooltip />
                 <el-table-column prop="price" label="价格" width="80" />
-                <el-table-column prop="quantity" label="库存" width="70" />
+                <el-table-column label="库存" width="70">
+                  <template #default="{ row: sku }">
+                    <span :class="{ 'stock-zero': isZeroStock(sku.quantity) }">{{ sku.quantity ?? '-' }}</span>
+                  </template>
+                </el-table-column>
                 <el-table-column prop="skuId" label="SKU ID" min-width="110" show-overflow-tooltip />
               </el-table>
               <div v-else class="muted sku-empty">无 SKU 明细</div>
@@ -774,6 +791,10 @@ onBeforeUnmount(() => {
   font-size: 12px;
   color: #606266;
 }
+.stock-zero {
+  color: #f56c6c;
+  font-weight: 600;
+}
 .selected-head {
   display: flex;
   gap: 12px;
@@ -789,6 +810,9 @@ onBeforeUnmount(() => {
   padding-top: 10px;
   min-width: 0;
   overflow-x: auto;
+}
+.sku-panel :deep(img) {
+  -webkit-user-drag: none;
 }
 .sku-thumb {
   width: 40px;
