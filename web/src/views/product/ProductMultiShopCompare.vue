@@ -569,9 +569,9 @@ onBeforeUnmount(() => {
                   </template>
                 </el-table-column>
                 <el-table-column prop="propertiesName" label="规格" min-width="120" show-overflow-tooltip />
-                <el-table-column prop="skuId" label="SKU ID" min-width="110" show-overflow-tooltip />
                 <el-table-column prop="price" label="价格" width="80" />
                 <el-table-column prop="quantity" label="库存" width="70" />
+                <el-table-column prop="skuId" label="SKU ID" min-width="110" show-overflow-tooltip />
               </el-table>
               <div v-else class="muted sku-empty">无 SKU 明细</div>
             </div>
