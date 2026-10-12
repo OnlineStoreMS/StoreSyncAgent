@@ -97,6 +97,10 @@ function isZeroStock(value?: number | null) {
   return value === 0
 }
 
+function skuRowClass({ row }: { row: { quantity?: number | null } }) {
+  return isZeroStock(row.quantity) ? 'sku-row-zero' : ''
+}
+
 function approveTagType(status?: string) {
   const s = (status || '').toLowerCase()
   if (s === 'onsale' || s === 'on_sale') return 'success'
@@ -566,6 +570,7 @@ onBeforeUnmount(() => {
                 border
                 stripe
                 max-height="480"
+                :row-class-name="skuRowClass"
               >
                 <el-table-column label="图片" width="64">
                   <template #default="{ row: sku }">
@@ -583,11 +588,7 @@ onBeforeUnmount(() => {
                 </el-table-column>
                 <el-table-column prop="propertiesName" label="规格" min-width="120" show-overflow-tooltip />
                 <el-table-column prop="price" label="价格" width="80" />
-                <el-table-column label="库存" width="70">
-                  <template #default="{ row: sku }">
-                    <span :class="{ 'stock-zero': isZeroStock(sku.quantity) }">{{ sku.quantity ?? '-' }}</span>
-                  </template>
-                </el-table-column>
+                <el-table-column prop="quantity" label="库存" width="70" />
                 <el-table-column prop="skuId" label="SKU ID" min-width="110" show-overflow-tooltip />
               </el-table>
               <div v-else class="muted sku-empty">无 SKU 明细</div>
@@ -794,6 +795,13 @@ onBeforeUnmount(() => {
 .stock-zero {
   color: #f56c6c;
   font-weight: 600;
+}
+.sku-panel :deep(.el-table__body tr.sku-row-zero > td.el-table__cell),
+.sku-panel :deep(.el-table--striped .el-table__body tr.sku-row-zero.el-table__row--striped > td.el-table__cell),
+.sku-panel :deep(.el-table__body tr.sku-row-zero:hover > td.el-table__cell),
+.sku-panel :deep(.el-table__body tr.sku-row-zero.hover-row > td.el-table__cell) {
+  background-color: #fde2e2;
+  color: #f56c6c;
 }
 .selected-head {
   display: flex;
