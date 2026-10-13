@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, type Ref } from 'vue'
+import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Rank, RefreshRight } from '@element-plus/icons-vue'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
@@ -42,6 +42,12 @@ const platformOptions = [
   { label: '淘宝', value: 'TB' },
   { label: '小红书', value: 'XHS' },
 ]
+
+const skuPicStorageKey = 'storesync.multi-shop-compare.showSkuPic'
+const showSkuPic = ref(localStorage.getItem(skuPicStorageKey) !== '0')
+watch(showSkuPic, (visible) => {
+  localStorage.setItem(skuPicStorageKey, visible ? '1' : '0')
+})
 
 const searching = ref(false)
 const searched = ref(false)
@@ -395,6 +401,7 @@ onBeforeUnmount(() => {
             <span v-if="selectedShopCount" class="count">（{{ selectedShopCount }} 店）</span>
           </div>
           <div class="actions">
+            <el-button @click="showSkuPic = !showSkuPic">{{ showSkuPic ? '隐藏图片列' : '显示图片列' }}</el-button>
             <el-button :icon="RefreshRight" @click="resetAll">重置</el-button>
           </div>
         </div>
@@ -566,13 +573,14 @@ onBeforeUnmount(() => {
               <el-table
                 v-if="col.selected.skus?.length"
                 :data="col.selected.skus"
+                :key="showSkuPic ? 'with-pic' : 'no-pic'"
                 size="small"
                 border
                 stripe
                 max-height="480"
                 :row-class-name="skuRowClass"
               >
-                <el-table-column label="图片" width="64">
+                <el-table-column v-if="showSkuPic" label="图片" width="64">
                   <template #default="{ row: sku }">
                     <el-image
                       v-if="sku.picUrl || col.selected?.picUrl"
