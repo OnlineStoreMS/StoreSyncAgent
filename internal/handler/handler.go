@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -69,6 +70,24 @@ func (h *Handler) ListProducts(c *gin.Context) {
 	result, err := svc.ListItems(c.Request.Context(), q)
 	if err != nil {
 		response.Fail(c, http.StatusBadGateway, err.Error())
+		return
+	}
+	response.OK(c, result)
+}
+
+func (h *Handler) ListSyncedProducts(c *gin.Context) {
+	svc, err := h.svc(c)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
+		return
+	}
+	keywords := c.QueryArray("keyword")
+	if raw := strings.TrimSpace(c.Query("keywords")); raw != "" {
+		keywords = append(keywords, strings.Split(raw, ",")...)
+	}
+	result, err := svc.ListSyncedItems(c.Query("shopId"), keywords)
+	if err != nil {
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	response.OK(c, result)

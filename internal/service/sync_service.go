@@ -30,6 +30,8 @@ type SyncService struct {
 	returnExchangeRepo *repo.ReturnExchangeRepo
 	notificationRepo   *repo.NotificationRepo
 	stockAlertRepo     *repo.StockAlertRepo
+	syncedItemRepo     *repo.SyncedItemRepo
+	snapshotRunning    map[string]struct{}
 	feishuClient       *feishu.Client
 	productCore        *productcore.Client
 }
@@ -41,6 +43,7 @@ func NewSyncService(
 	returnExchangeRepo *repo.ReturnExchangeRepo,
 	notificationRepo *repo.NotificationRepo,
 	stockAlertRepo *repo.StockAlertRepo,
+	syncedItemRepo *repo.SyncedItemRepo,
 ) (*SyncService, error) {
 	globalBaseURL := baseCfg.Kdzs.BaseURL
 	if globalBaseURL == "" {
@@ -57,6 +60,7 @@ func NewSyncService(
 		returnExchangeRepo: returnExchangeRepo,
 		notificationRepo:   notificationRepo,
 		stockAlertRepo:     stockAlertRepo,
+		syncedItemRepo:     syncedItemRepo,
 		feishuClient:       feishu.NewClient(),
 		productCore:        productcore.NewClient(baseCfg.Integrations.ProductCoreAPIURL),
 	}
@@ -195,22 +199,22 @@ type ItemSkuView struct {
 }
 
 type ItemView struct {
-	ItemID              string        `json:"itemId"`
-	Title               string        `json:"title"`
-	ShortTitle          string        `json:"shortTitle"`
-	OuterID             string        `json:"outerId"`
-	PicURL              string        `json:"picUrl"`
-	Price               string        `json:"price"`
-	Stock               int           `json:"stock"`
-	Platform            string        `json:"platform"`
-	PlatformName        string        `json:"platformName"`
-	ShopID              string        `json:"shopId"`
-	ShopName            string        `json:"shopName"`
-	ApproveStatus       string        `json:"approveStatus"`
-	ApproveStatusLabel  string        `json:"approveStatusLabel"`
-	ProductNum          string        `json:"productNum"`
-	BindTime            string        `json:"bindTime"`
-	Skus                []ItemSkuView `json:"skus,omitempty"`
+	ItemID             string        `json:"itemId"`
+	Title              string        `json:"title"`
+	ShortTitle         string        `json:"shortTitle"`
+	OuterID            string        `json:"outerId"`
+	PicURL             string        `json:"picUrl"`
+	Price              string        `json:"price"`
+	Stock              int           `json:"stock"`
+	Platform           string        `json:"platform"`
+	PlatformName       string        `json:"platformName"`
+	ShopID             string        `json:"shopId"`
+	ShopName           string        `json:"shopName"`
+	ApproveStatus      string        `json:"approveStatus"`
+	ApproveStatusLabel string        `json:"approveStatusLabel"`
+	ProductNum         string        `json:"productNum"`
+	BindTime           string        `json:"bindTime"`
+	Skus               []ItemSkuView `json:"skus,omitempty"`
 }
 
 type ItemListView struct {
@@ -493,7 +497,11 @@ func (s *SyncService) SyncItems(ctx context.Context, platform string, shopIDs []
 	if len(shopIDs) == 0 {
 		return fmt.Errorf("no shops found for platform %s", platform)
 	}
-	return s.session.SyncShopItems(ctx, platform, shopIDs)
+	if err := s.session.SyncShopItems(ctx, platform, shopIDs); err != nil {
+		return err
+	}
+	s.startSyncedItemSnapshot(platform, shopIDs)
+	return nil
 }
 
 func (s *SyncService) GetItemSyncProgress(ctx context.Context, platform string) (*kdzs.SyncProgress, error) {
@@ -542,11 +550,11 @@ type OrderListView struct {
 }
 
 type OrderStatsView struct {
-	WaitingPushTotal int            `json:"waitingPushTotal"`
-	WaitingSendTotal int            `json:"waitingSendTotal"`
+	WaitingPushTotal      int            `json:"waitingPushTotal"`
+	WaitingSendTotal      int            `json:"waitingSendTotal"`
 	WaitingPushByPlatform map[string]int `json:"waitingPushByPlatform,omitempty"`
-	TabWaitAudit     int            `json:"tabWaitAudit,omitempty"`
-	TabWaitSend      int            `json:"tabWaitSend,omitempty"`
+	TabWaitAudit          int            `json:"tabWaitAudit,omitempty"`
+	TabWaitSend           int            `json:"tabWaitSend,omitempty"`
 }
 
 func (s *SyncService) ListOrders(ctx context.Context, q OrderQuery) (*OrderListView, error) {
@@ -882,23 +890,23 @@ func (s *SyncService) LoginStatus(ctx context.Context) (map[string]any, error) {
 	}
 	acc, _ := s.activeAccount()
 	return map[string]any{
-		"loggedIn":        true,
-		"userId":          s.session.UserID(),
-		"mobile":          s.session.Mobile(),
-		"accountId":       acc.ID,
-		"accountName":     acc.Name,
-		"accountRole":     acc.Role,
+		"loggedIn":         true,
+		"userId":           s.session.UserID(),
+		"mobile":           s.session.Mobile(),
+		"accountId":        acc.ID,
+		"accountName":      acc.Name,
+		"accountRole":      acc.Role,
 		"accountRoleLabel": accountRoleLabel(acc.Role),
 	}, nil
 }
 
 type KdzsAccountView struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Role     string `json:"role"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
 	RoleLabel string `json:"roleLabel"`
-	Mobile   string `json:"mobile"`
-	Active   bool   `json:"active"`
+	Mobile    string `json:"mobile"`
+	Active    bool   `json:"active"`
 }
 
 func accountRoleLabel(role string) string {
@@ -1116,22 +1124,22 @@ func (s *SyncService) ShipCallback(ctx context.Context, req ShipCallbackRequest)
 }
 
 type RefundQuery struct {
-	Platform          string `form:"platform"`
-	ShopID            string `form:"shopId"`
-	PageNo            int    `form:"pageNo"`
-	PageSize          int    `form:"pageSize"`
-	DateType          int    `form:"dateType"`
-	StartDateTime     string `form:"startDateTime"`
-	EndDateTime       string `form:"endDateTime"`
-	AfterSaleStatus   string `form:"afterSaleStatus"`
-	AfterSaleType     string `form:"afterSaleType"`
-	Sid               string `form:"sid"`
-	RefundID          string `form:"refundId"`
-	Tid               string `form:"tid"`
-	SysTid            string `form:"sysTid"`
-	Scenario          string `form:"scenario"`
-	EnrichLogistics   bool   `form:"enrichLogistics"`
-	TradeDaifaStatus  string `form:"tradeDaifaStatus"`
+	Platform         string `form:"platform"`
+	ShopID           string `form:"shopId"`
+	PageNo           int    `form:"pageNo"`
+	PageSize         int    `form:"pageSize"`
+	DateType         int    `form:"dateType"`
+	StartDateTime    string `form:"startDateTime"`
+	EndDateTime      string `form:"endDateTime"`
+	AfterSaleStatus  string `form:"afterSaleStatus"`
+	AfterSaleType    string `form:"afterSaleType"`
+	Sid              string `form:"sid"`
+	RefundID         string `form:"refundId"`
+	Tid              string `form:"tid"`
+	SysTid           string `form:"sysTid"`
+	Scenario         string `form:"scenario"`
+	EnrichLogistics  bool   `form:"enrichLogistics"`
+	TradeDaifaStatus string `form:"tradeDaifaStatus"`
 }
 
 type RefundFiltersView struct {
@@ -1167,12 +1175,12 @@ type RefundStatsView struct {
 }
 
 type RefundListView struct {
-	Total    int                  `json:"total"`
-	PageNo   int                  `json:"pageNo"`
-	PageSize int                  `json:"pageSize"`
-	Items    []kdzs.RefundItem    `json:"items"`
-	Filters  *RefundFiltersView   `json:"filters,omitempty"`
-	Stats    *RefundStatsView     `json:"stats,omitempty"`
+	Total    int                `json:"total"`
+	PageNo   int                `json:"pageNo"`
+	PageSize int                `json:"pageSize"`
+	Items    []kdzs.RefundItem  `json:"items"`
+	Filters  *RefundFiltersView `json:"filters,omitempty"`
+	Stats    *RefundStatsView   `json:"stats,omitempty"`
 }
 
 func (s *SyncService) ListRefunds(ctx context.Context, q RefundQuery) (*RefundListView, error) {

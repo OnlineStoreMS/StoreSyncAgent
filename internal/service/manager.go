@@ -16,6 +16,7 @@ type Manager struct {
 	returnExchangeRepo *repo.ReturnExchangeRepo
 	notificationRepo   *repo.NotificationRepo
 	stockAlertRepo     *repo.StockAlertRepo
+	syncedItemRepo     *repo.SyncedItemRepo
 	mu                 sync.Mutex
 	services           map[uint64]*SyncService
 }
@@ -26,6 +27,7 @@ func NewManager(
 	returnExchangeRepo *repo.ReturnExchangeRepo,
 	notificationRepo *repo.NotificationRepo,
 	stockAlertRepo *repo.StockAlertRepo,
+	syncedItemRepo *repo.SyncedItemRepo,
 ) *Manager {
 	return &Manager{
 		baseCfg:            baseCfg,
@@ -33,6 +35,7 @@ func NewManager(
 		returnExchangeRepo: returnExchangeRepo,
 		notificationRepo:   notificationRepo,
 		stockAlertRepo:     stockAlertRepo,
+		syncedItemRepo:     syncedItemRepo,
 		services:           make(map[uint64]*SyncService),
 	}
 }
@@ -56,7 +59,7 @@ func (m *Manager) ForTenant(tenantID uint64) (*SyncService, error) {
 	if svc, ok := m.services[tenantID]; ok {
 		return svc, nil
 	}
-	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo, m.returnExchangeRepo, m.notificationRepo, m.stockAlertRepo)
+	svc, err := NewSyncService(m.baseCfg, tenantID, m.kdzsRepo, m.returnExchangeRepo, m.notificationRepo, m.stockAlertRepo, m.syncedItemRepo)
 	if err != nil {
 		return nil, err
 	}

@@ -44,6 +44,7 @@ func Setup(h *handler.Handler, cfg *config.Config, webDist string) *gin.Engine {
 		adminGroup.GET("/kdzs/shared-accounts", h.ListSharedExpressAccounts)
 		adminGroup.GET("/shops", h.ListShops)
 		adminGroup.GET("/products", h.ListProducts)
+		adminGroup.GET("/products/synced", h.ListSyncedProducts)
 		adminGroup.POST("/products/sync", h.SyncProducts)
 		adminGroup.GET("/products/sync-progress", h.GetProductSyncProgress)
 		adminGroup.POST("/products/compare", h.CompareProducts)

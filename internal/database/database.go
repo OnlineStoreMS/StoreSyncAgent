@@ -30,5 +30,6 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.ReturnExchange{},
 		&model.TenantNotification{},
 		&model.TenantStockAlert{},
+		&model.SyncedShopItem{},
 	)
 }

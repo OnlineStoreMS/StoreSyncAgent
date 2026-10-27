@@ -180,6 +180,13 @@ export interface ProductSyncProgress {
   finishSyncDate?: string
 }
 
+export async function listSyncedProducts(shopId: string, keywords: string[]) {
+  const params = new URLSearchParams()
+  params.set('shopId', shopId)
+  for (const kw of keywords) params.append('keyword', kw)
+  return unwrap(await http.get<ProductListResponse>('/products/synced', { params }))
+}
+
 export async function listProducts(params: {
   platform?: string
   shopId?: string

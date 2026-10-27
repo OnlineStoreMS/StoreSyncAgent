@@ -3,7 +3,7 @@ import { computed, inject, onBeforeUnmount, onMounted, reactive, ref, watch, typ
 import { ElMessage } from 'element-plus'
 import { Rank, RefreshRight } from '@element-plus/icons-vue'
 import { useAccountRefresh } from '../../composables/useAccountRefresh'
-import { listProducts, type Product } from '../../api'
+import { listSyncedProducts, type Product } from '../../api'
 import { useKdzsStore } from '../../stores/kdzs'
 
 const kdzsStore = useKdzsStore()
@@ -16,7 +16,7 @@ interface ShopColumn {
   platformName: string
   loading: boolean
   error: string
-  /** 远端按「全部状态」拉取后的缓存 */
+  /** 本地已同步商品按「全部状态」取出后的缓存 */
   allCandidates: Product[]
   /** 按当前商品状态筛过的展示列表 */
   candidates: Product[]
@@ -54,7 +54,7 @@ const searched = ref(false)
 const columns = ref<ShopColumn[]>([])
 const dragFromIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
-/** 当前缓存对应的关键字签名；变更才重新打远端 */
+/** 当前缓存对应的关键字签名；变更才重新查本地库 */
 let cacheKeywordsKey = ''
 let searchSeq = 0
 
@@ -215,19 +215,8 @@ function shopMeta(shopId: string) {
   }
 }
 
-async function fetchShopCandidates(shopId: string, platform: string, keywords: string[]): Promise<Product[]> {
-  // 始终按「全部状态」拉取，状态筛选项只做本地缓存过滤
-  const primary =
-    keywords.length <= 1
-      ? keywords[0]
-      : [...keywords].sort((a, b) => a.length - b.length)[0]
-  const data = await listProducts({
-    platform: platform || undefined,
-    shopId,
-    title: primary || undefined,
-    pageNo: 1,
-    pageSize: 100,
-  })
+async function fetchShopCandidates(shopId: string, _platform: string, keywords: string[]): Promise<Product[]> {
+  const data = await listSyncedProducts(shopId, keywords)
   const items = data.items || []
   if (!keywords.length) return items
   return items.filter((p) => matchExactKeywords(p, keywords))
@@ -456,7 +445,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="filter-hint muted">
-          首次按全部状态拉取并缓存；切换上架/下架仅本地筛选。关键字变更后才会重新查询。
+          从本地已同步商品中查询。店铺没有数据时，请先到商品列表点击「同步商品」。切换上架/下架只筛当前结果。
         </div>
       </div>
 
