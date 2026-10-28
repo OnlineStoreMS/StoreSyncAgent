@@ -53,19 +53,19 @@ type ShopItem struct {
 }
 
 type ItemListQuery struct {
-	PageNo             int
-	PageSize           int
-	ShopIDList         []string
-	Type               string // onsale / instock
-	Title              string
-	ShortTitle         string
-	ItemIDs            string // numIids
-	OuterID            string
-	ProductNumLike     string
-	SpuPropertiesName  string
-	SkuIDs             string
-	SkuOuterID         string
-	SkuShortTitle      string
+	PageNo            int
+	PageSize          int
+	ShopIDList        []string
+	Type              string // onsale / instock
+	Title             string
+	ShortTitle        string
+	ItemIDs           string // numIids
+	OuterID           string
+	ProductNumLike    string
+	SpuPropertiesName string
+	SkuIDs            string
+	SkuOuterID        string
+	SkuShortTitle     string
 }
 
 type ItemListResult struct {
@@ -301,6 +301,8 @@ func (s *Session) ListShopItems(ctx context.Context, platform string, q ItemList
 	return nil, lastErr
 }
 
+// SyncShopItems 触发快递助手商品页的「刷新同步」，会向店铺平台重新拉商品。
+// 商品列表的「同步商品」不要调用它，只读取商品页里已经同步好的结果。
 func (s *Session) SyncShopItems(ctx context.Context, platform string, shopIDs []string) error {
 	if len(shopIDs) == 0 {
 		return fmt.Errorf("shopIds is required")

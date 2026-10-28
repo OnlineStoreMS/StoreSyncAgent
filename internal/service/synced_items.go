@@ -59,8 +59,12 @@ func (s *SyncService) ListSyncedItems(shopID string, keywords []string) (*ItemLi
 }
 
 type snapshotMark struct {
-	running bool
-	err     string
+	running    bool
+	done       bool
+	err        string
+	shopsTotal int
+	shopsDone  int
+	itemCounts map[string]int
 }
 
 func (s *SyncService) ListLocalItems(q ItemQuery) (*ItemListView, error) {
@@ -121,29 +125,58 @@ func nonEmpty(values ...string) []string {
 	return out
 }
 
-func (s *SyncService) ProductSyncProgress(ctx context.Context, platform string) (*kdzs.SyncProgress, error) {
-	progress, err := s.GetItemSyncProgress(ctx, platform)
-	if err != nil || progress == nil {
-		return progress, err
+func (s *SyncService) ProductSyncProgress(_ context.Context, platform string) (*kdzs.SyncProgress, error) {
+	if err := s.ensureDefaultActiveAccount(); err != nil {
+		return nil, err
 	}
-	running, snapErr := s.snapshotStatus(s.activeAccountID, platform)
-	if snapErr != "" {
-		progress.ErrorMessage = snapErr
-		progress.Finish = true
-		return progress, nil
+	key := snapshotKey(s.activeAccountID, platform)
+	s.mu.Lock()
+	st := s.snapshotState[key]
+	counts := copyItemCounts(st.itemCounts)
+	s.mu.Unlock()
+
+	progress := &kdzs.SyncProgress{
+		Finish:        st.done && !st.running,
+		ErrorMessage:  st.err,
+		SyncItemCount: counts,
 	}
-	if running {
+	if st.shopsTotal > 0 {
+		progress.Process = st.shopsDone * 100 / st.shopsTotal
+	}
+	if st.running {
 		progress.Finish = false
+	}
+	if st.err != "" {
+		progress.Finish = true
 	}
 	return progress, nil
 }
 
-func (s *SyncService) snapshotStatus(account, platform string) (running bool, errMsg string) {
-	key := account + "\x00" + strings.ToUpper(strings.TrimSpace(platform))
+func snapshotKey(account, platform string) string {
+	return account + "\x00" + strings.ToUpper(strings.TrimSpace(platform))
+}
+
+func copyItemCounts(src map[string]int) map[string]int {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(src))
+	for k, v := range src {
+		out[k] = v
+	}
+	return out
+}
+
+func (s *SyncService) updateSnapshot(account, platform string, fn func(*snapshotMark)) {
+	key := snapshotKey(account, platform)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.snapshotState == nil {
+		s.snapshotState = map[string]snapshotMark{}
+	}
 	st := s.snapshotState[key]
-	return st.running, st.err
+	fn(&st)
+	s.snapshotState[key] = st
 }
 
 func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string) {
@@ -154,7 +187,7 @@ func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string)
 	if account == "" || platform == "" {
 		return
 	}
-	key := account + "\x00" + platform
+	key := snapshotKey(account, platform)
 	s.mu.Lock()
 	if s.snapshotState == nil {
 		s.snapshotState = map[string]snapshotMark{}
@@ -163,7 +196,7 @@ func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string)
 		s.mu.Unlock()
 		return
 	}
-	s.snapshotState[key] = snapshotMark{running: true}
+	s.snapshotState[key] = snapshotMark{running: true, itemCounts: map[string]int{}}
 	s.mu.Unlock()
 
 	ids := append([]string(nil), shopIDs...)
@@ -171,21 +204,20 @@ func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string)
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 		defer cancel()
 		err := s.snapshotSyncedItems(ctx, account, platform, ids)
-		s.mu.Lock()
-		s.snapshotState[key] = snapshotMark{err: errorText(err)}
-		s.mu.Unlock()
+		s.updateSnapshot(account, platform, func(st *snapshotMark) {
+			st.running = false
+			st.done = err == nil
+			st.err = errorText(err)
+		})
 		if err != nil {
-			log.Printf("[synced-items] snapshot account=%s platform=%s: %v", account, platform, err)
+			log.Printf("[synced-items] import account=%s platform=%s: %v", account, platform, err)
 			return
 		}
-		log.Printf("[synced-items] snapshot account=%s platform=%s shops=%d done", account, platform, len(ids))
+		log.Printf("[synced-items] import account=%s platform=%s shops=%d done", account, platform, len(ids))
 	}()
 }
 
 func (s *SyncService) snapshotSyncedItems(ctx context.Context, account, platform string, shopIDs []string) error {
-	if err := s.waitItemSyncSettled(ctx, platform); err != nil {
-		return err
-	}
 	if s.activeAccountID != account {
 		return fmt.Errorf("快递助手账号已切换，取消写入本地商品")
 	}
@@ -220,6 +252,14 @@ func (s *SyncService) snapshotSyncedItems(ctx context.Context, account, platform
 	if len(targets) == 0 {
 		targets = shopIDs
 	}
+	s.updateSnapshot(account, platform, func(st *snapshotMark) {
+		st.running = true
+		st.done = false
+		st.err = ""
+		st.shopsTotal = len(targets)
+		st.shopsDone = 0
+		st.itemCounts = map[string]int{}
+	})
 	var saved int
 	for _, shopID := range targets {
 		if s.activeAccountID != account {
@@ -272,6 +312,14 @@ func (s *SyncService) snapshotSyncedItems(ctx context.Context, account, platform
 			return err
 		}
 		saved += len(rows)
+		shopSaved := len(rows)
+		s.updateSnapshot(account, platform, func(st *snapshotMark) {
+			if st.itemCounts == nil {
+				st.itemCounts = map[string]int{}
+			}
+			st.itemCounts[shopID] = shopSaved
+			st.shopsDone++
+		})
 	}
 	log.Printf("[synced-items] saved account=%s platform=%s items=%d", account, platform, saved)
 	return nil
@@ -307,61 +355,6 @@ func (s *SyncService) listAllShopItems(ctx context.Context, platform, shopID str
 		}
 	}
 	return all, nil
-}
-
-func (s *SyncService) waitItemSyncSettled(ctx context.Context, platform string) error {
-	if err := s.ensureLogin(ctx); err != nil {
-		return err
-	}
-	initial, err := s.session.GetItemSyncProgress(ctx, platform)
-	if err != nil {
-		return err
-	}
-	initialStamp := syncProgressStamp(initial)
-	sawRunning := initial != nil && !initial.Finish
-	started := time.Now()
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-		}
-		if err := s.ensureLogin(ctx); err != nil {
-			return err
-		}
-		progress, err := s.session.GetItemSyncProgress(ctx, platform)
-		if err != nil {
-			return err
-		}
-		if progress == nil {
-			return fmt.Errorf("同步进度为空")
-		}
-		if msg := strings.TrimSpace(progress.ErrorMessage); msg != "" && !progress.Finish {
-			return fmt.Errorf("%s", msg)
-		}
-		if !progress.Finish {
-			sawRunning = true
-			continue
-		}
-		if msg := strings.TrimSpace(progress.ErrorMessage); msg != "" {
-			return fmt.Errorf("%s", msg)
-		}
-		if sawRunning || syncProgressStamp(progress) != initialStamp {
-			return nil
-		}
-		if time.Since(started) >= 20*time.Second {
-			return nil
-		}
-	}
-}
-
-func syncProgressStamp(p *kdzs.SyncProgress) string {
-	if p == nil {
-		return ""
-	}
-	return fmt.Sprintf("%t|%d|%s|%s", p.Finish, p.Process, p.FinishSyncDate, p.ErrorMessage)
 }
 
 func skuSearchText(item ItemView) string {

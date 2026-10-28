@@ -497,9 +497,7 @@ func (s *SyncService) SyncItems(ctx context.Context, platform string, shopIDs []
 	if len(shopIDs) == 0 {
 		return fmt.Errorf("no shops found for platform %s", platform)
 	}
-	if err := s.session.SyncShopItems(ctx, platform, shopIDs); err != nil {
-		return err
-	}
+	// 只拉取快递助手商品页里已经同步好的商品，不调用刷新同步。
 	s.startSyncedItemSnapshot(platform, shopIDs)
 	return nil
 }

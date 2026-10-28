@@ -85,7 +85,7 @@ const progressText = computed(() => {
     return parts.join('；')
   }
   if (p.process != null && p.process > 0) return `同步进度 ${p.process}%`
-  return '正在同步商品，请耐心等待…'
+  return '正在读取快递助手已同步的商品…'
 })
 
 const filterSummaryTags = computed(() => {
@@ -287,7 +287,7 @@ async function handleSync() {
       platform: filters.platform,
       shopIds: filters.shopId ? [filters.shopId] : undefined,
     })
-    ElMessage.success('已发起商品同步')
+    ElMessage.success('正在读取快递助手已同步的商品')
     syncProgress.value = { finish: false, process: 0 }
     startProgressPoll()
   } catch (e: any) {
