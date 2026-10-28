@@ -249,7 +249,9 @@ async function pollSyncProgress() {
     syncProgress.value = data
     if (data.finish) {
       stopProgressPoll()
-      if (!data.errorMessage) {
+      if (data.errorMessage) {
+        ElMessage.error(data.errorMessage)
+      } else {
         ElMessage.success('商品同步完成')
         await loadProducts()
       }
@@ -343,10 +345,6 @@ useAccountRefresh(refreshPage)
 onMounted(async () => {
   await kdzsStore.loadShops()
   await loadProducts()
-  await pollSyncProgress()
-  if (syncProgress.value && !syncProgress.value.finish) {
-    startProgressPoll()
-  }
 })
 
 onBeforeUnmount(() => {
@@ -501,7 +499,7 @@ onBeforeUnmount(() => {
         v-loading="loading.products"
         stripe
         border
-        empty-text="暂无商品，请先同步"
+        empty-text="暂无本地商品，请点击「同步商品」"
         row-key="itemId"
       >
         <el-table-column type="expand">

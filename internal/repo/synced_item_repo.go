@@ -25,6 +25,84 @@ func (r *SyncedItemRepo) CountShop(tenantID uint64, accountCode, shopID string) 
 	return n, err
 }
 
+type SyncedItemListQuery struct {
+	Platform       string
+	ShopIDs        []string
+	Type           string
+	Title          string
+	ShortTitle     string
+	ItemIDs        []string
+	OuterID        string
+	ProductNumLike string
+	SkuTexts       []string
+	PageNo         int
+	PageSize       int
+}
+
+func (r *SyncedItemRepo) List(tenantID uint64, accountCode string, q SyncedItemListQuery) ([]model.SyncedShopItem, int64, error) {
+	pageNo := q.PageNo
+	if pageNo < 1 {
+		pageNo = 1
+	}
+	pageSize := q.PageSize
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 200 {
+		pageSize = 200
+	}
+	dbq := r.db.Model(&model.SyncedShopItem{}).
+		Where("tenant_id = ? AND account_code = ?", tenantID, accountCode)
+	if platform := strings.ToUpper(strings.TrimSpace(q.Platform)); platform != "" {
+		dbq = dbq.Where("platform = ?", platform)
+	}
+	if len(q.ShopIDs) > 0 {
+		dbq = dbq.Where("shop_id IN ?", q.ShopIDs)
+	}
+	if len(q.ItemIDs) > 0 {
+		dbq = dbq.Where("item_id IN ?", q.ItemIDs)
+	}
+	dbq = applyApproveType(dbq, q.Type)
+	dbq = applyLike(dbq, "title", q.Title)
+	dbq = applyLike(dbq, "short_title", q.ShortTitle)
+	dbq = applyLike(dbq, "outer_id", q.OuterID)
+	dbq = applyLike(dbq, "product_num", q.ProductNumLike)
+	for _, text := range q.SkuTexts {
+		dbq = applyLike(dbq, "sku_search_text", text)
+	}
+
+	var total int64
+	if err := dbq.Session(&gorm.Session{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var rows []model.SyncedShopItem
+	err := dbq.Session(&gorm.Session{}).
+		Order("shop_id, item_id").
+		Offset((pageNo - 1) * pageSize).
+		Limit(pageSize).
+		Find(&rows).Error
+	return rows, total, err
+}
+
+func applyLike(dbq *gorm.DB, column, value string) *gorm.DB {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return dbq
+	}
+	return dbq.Where("LOWER("+column+") LIKE ? ESCAPE '\\'", "%"+escapeLike(value)+"%")
+}
+
+func applyApproveType(dbq *gorm.DB, typ string) *gorm.DB {
+	switch strings.ToLower(strings.TrimSpace(typ)) {
+	case "onsale":
+		return dbq.Where("LOWER(REPLACE(approve_status, '-', '_')) IN ?", []string{"onsale", "on_sale"})
+	case "instock":
+		return dbq.Where("LOWER(REPLACE(approve_status, '-', '_')) IN ?", []string{"instock", "in_stock"})
+	default:
+		return dbq
+	}
+}
+
 func (r *SyncedItemRepo) Search(tenantID uint64, accountCode, shopID string, keywords []string, limit int) ([]model.SyncedShopItem, error) {
 	q := r.db.Where("tenant_id = ? AND account_code = ? AND shop_id = ?", tenantID, accountCode, shopID)
 	for _, kw := range keywords {

@@ -10,6 +10,7 @@ import (
 
 	"storesyncagent/internal/kdzs"
 	"storesyncagent/internal/model"
+	"storesyncagent/internal/repo"
 )
 
 const syncedItemSearchLimit = 500
@@ -57,6 +58,94 @@ func (s *SyncService) ListSyncedItems(shopID string, keywords []string) (*ItemLi
 	}, nil
 }
 
+type snapshotMark struct {
+	running bool
+	err     string
+}
+
+func (s *SyncService) ListLocalItems(q ItemQuery) (*ItemListView, error) {
+	if s.syncedItemRepo == nil {
+		return nil, fmt.Errorf("本地商品库不可用")
+	}
+	if err := s.ensureDefaultActiveAccount(); err != nil {
+		return nil, err
+	}
+	pageNo := q.PageNo
+	if pageNo < 1 {
+		pageNo = 1
+	}
+	pageSize := q.PageSize
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	rows, total, err := s.syncedItemRepo.List(s.tenantID, s.activeAccountID, repo.SyncedItemListQuery{
+		Platform:       q.Platform,
+		ShopIDs:        splitShopIDs(q.ShopID),
+		Type:           q.Type,
+		Title:          q.Title,
+		ShortTitle:     q.ShortTitle,
+		ItemIDs:        splitShopIDs(q.ItemIDs),
+		OuterID:        q.OuterID,
+		ProductNumLike: q.ProductNumLike,
+		SkuTexts:       nonEmpty(q.SpuPropertiesName, q.SkuIDs, q.SkuOuterID, q.SkuShortTitle),
+		PageNo:         pageNo,
+		PageSize:       pageSize,
+	})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]ItemView, 0, len(rows))
+	for _, row := range rows {
+		var item ItemView
+		if err := json.Unmarshal([]byte(row.Payload), &item); err != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return &ItemListView{
+		Total:    int(total),
+		PageNo:   pageNo,
+		PageSize: pageSize,
+		Items:    items,
+		Platform: strings.ToUpper(strings.TrimSpace(q.Platform)),
+	}, nil
+}
+
+func nonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func (s *SyncService) ProductSyncProgress(ctx context.Context, platform string) (*kdzs.SyncProgress, error) {
+	progress, err := s.GetItemSyncProgress(ctx, platform)
+	if err != nil || progress == nil {
+		return progress, err
+	}
+	running, snapErr := s.snapshotStatus(s.activeAccountID, platform)
+	if snapErr != "" {
+		progress.ErrorMessage = snapErr
+		progress.Finish = true
+		return progress, nil
+	}
+	if running {
+		progress.Finish = false
+	}
+	return progress, nil
+}
+
+func (s *SyncService) snapshotStatus(account, platform string) (running bool, errMsg string) {
+	key := account + "\x00" + strings.ToUpper(strings.TrimSpace(platform))
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	st := s.snapshotState[key]
+	return st.running, st.err
+}
+
 func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string) {
 	if s.syncedItemRepo == nil {
 		return
@@ -67,26 +156,25 @@ func (s *SyncService) startSyncedItemSnapshot(platform string, shopIDs []string)
 	}
 	key := account + "\x00" + platform
 	s.mu.Lock()
-	if s.snapshotRunning == nil {
-		s.snapshotRunning = map[string]struct{}{}
+	if s.snapshotState == nil {
+		s.snapshotState = map[string]snapshotMark{}
 	}
-	if _, ok := s.snapshotRunning[key]; ok {
+	if s.snapshotState[key].running {
 		s.mu.Unlock()
 		return
 	}
-	s.snapshotRunning[key] = struct{}{}
+	s.snapshotState[key] = snapshotMark{running: true}
 	s.mu.Unlock()
 
 	ids := append([]string(nil), shopIDs...)
 	go func() {
-		defer func() {
-			s.mu.Lock()
-			delete(s.snapshotRunning, key)
-			s.mu.Unlock()
-		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 		defer cancel()
-		if err := s.snapshotSyncedItems(ctx, account, platform, ids); err != nil {
+		err := s.snapshotSyncedItems(ctx, account, platform, ids)
+		s.mu.Lock()
+		s.snapshotState[key] = snapshotMark{err: errorText(err)}
+		s.mu.Unlock()
+		if err != nil {
 			log.Printf("[synced-items] snapshot account=%s platform=%s: %v", account, platform, err)
 			return
 		}
@@ -166,12 +254,18 @@ func (s *SyncService) snapshotSyncedItems(ctx context.Context, account, platform
 				return err
 			}
 			rows = append(rows, model.SyncedShopItem{
-				Platform:   platform,
-				ShopName:   item.ShopName,
-				ItemID:     item.ItemID,
-				SearchText: itemSearchText(item),
-				Payload:    string(payload),
-				SyncedAt:   now,
+				Platform:      platform,
+				ShopName:      item.ShopName,
+				ItemID:        item.ItemID,
+				ApproveStatus: item.ApproveStatus,
+				Title:         item.Title,
+				ShortTitle:    item.ShortTitle,
+				OuterID:       item.OuterID,
+				ProductNum:    item.ProductNum,
+				SearchText:    itemSearchText(item),
+				SkuSearchText: skuSearchText(item),
+				Payload:       string(payload),
+				SyncedAt:      now,
 			})
 		}
 		if err := s.syncedItemRepo.ReplaceShop(s.tenantID, account, shopID, rows); err != nil {
@@ -268,6 +362,21 @@ func syncProgressStamp(p *kdzs.SyncProgress) string {
 		return ""
 	}
 	return fmt.Sprintf("%t|%d|%s|%s", p.Finish, p.Process, p.FinishSyncDate, p.ErrorMessage)
+}
+
+func skuSearchText(item ItemView) string {
+	parts := make([]string, 0, len(item.Skus)*5)
+	for _, sku := range item.Skus {
+		parts = append(parts, sku.PropertiesName, sku.SkuID, sku.OuterID, sku.ShortTitle, sku.ProductNum)
+	}
+	return strings.ToLower(strings.Join(parts, " "))
+}
+
+func errorText(err error) string {
+	if err == nil {
+		return ""
+	}
+	return err.Error()
 }
 
 func itemSearchText(item ItemView) string {

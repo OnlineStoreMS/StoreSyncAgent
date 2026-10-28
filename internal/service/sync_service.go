@@ -31,7 +31,7 @@ type SyncService struct {
 	notificationRepo   *repo.NotificationRepo
 	stockAlertRepo     *repo.StockAlertRepo
 	syncedItemRepo     *repo.SyncedItemRepo
-	snapshotRunning    map[string]struct{}
+	snapshotState      map[string]snapshotMark
 	feishuClient       *feishu.Client
 	productCore        *productcore.Client
 }

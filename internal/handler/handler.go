@@ -67,9 +67,9 @@ func (h *Handler) ListProducts(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	result, err := svc.ListItems(c.Request.Context(), q)
+	result, err := svc.ListLocalItems(q)
 	if err != nil {
-		response.Fail(c, http.StatusBadGateway, err.Error())
+		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
 	response.OK(c, result)
@@ -121,7 +121,7 @@ func (h *Handler) GetProductSyncProgress(c *gin.Context) {
 		return
 	}
 	platform := c.Query("platform")
-	result, err := svc.GetItemSyncProgress(c.Request.Context(), platform)
+	result, err := svc.ProductSyncProgress(c.Request.Context(), platform)
 	if err != nil {
 		response.Fail(c, http.StatusBadGateway, err.Error())
 		return
