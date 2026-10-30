@@ -143,23 +143,10 @@ function keywordsCacheKey(keywords: string[] = activeKeywords()): string {
     .join('\u0001')
 }
 
-/** 精确：标题/简称/编码/商品ID/SKU 规格中同时包含全部关键字 */
+/** 快速搜索：仅按商品标题，全部关键字需同时命中 */
 function matchExactKeywords(item: Product, keywords: string[]): boolean {
   if (!keywords.length) return true
-  const skuText = (item.skus || [])
-    .map((s) => [s.propertiesName, s.skuId, s.outerId, s.shortTitle].filter(Boolean).join(' '))
-    .join(' ')
-  const hay = [
-    item.title,
-    item.shortTitle,
-    item.outerId,
-    item.itemId,
-    item.productNum,
-    skuText,
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
+  const hay = (item.title || '').toLowerCase()
   return keywords.every((kw) => hay.includes(kw.toLowerCase()))
 }
 
@@ -437,7 +424,7 @@ onBeforeUnmount(() => {
               collapse-tags
               collapse-tags-tooltip
               clearable
-              placeholder="输入关键字后回车添加，可多个；需同时命中"
+              placeholder="按标题搜索，回车添加关键字，可多个；需同时命中"
               style="width: min(520px, 100%)"
               @change="onKeywordTagsChange"
             />
@@ -445,7 +432,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="filter-hint muted">
-          从本地已同步商品中查询。店铺没有数据时，请先到商品列表点击「同步商品」。切换上架/下架只筛当前结果。
+          按商品标题从本地已同步商品中查询（不含 SKU）。店铺没有数据时，请先到商品列表点击「同步商品」。切换上架/下架只筛当前结果。
         </div>
       </div>
 

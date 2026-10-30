@@ -103,6 +103,7 @@ func applyApproveType(dbq *gorm.DB, typ string) *gorm.DB {
 	}
 }
 
+// Search 同商品比对快速搜索：只按商品标题匹配，不包含 SKU 规格/编码等字段。
 func (r *SyncedItemRepo) Search(tenantID uint64, accountCode, shopID string, keywords []string, limit int) ([]model.SyncedShopItem, error) {
 	q := r.db.Where("tenant_id = ? AND account_code = ? AND shop_id = ?", tenantID, accountCode, shopID)
 	for _, kw := range keywords {
@@ -110,7 +111,7 @@ func (r *SyncedItemRepo) Search(tenantID uint64, accountCode, shopID string, key
 		if kw == "" {
 			continue
 		}
-		q = q.Where("search_text LIKE ? ESCAPE '\\'", "%"+escapeLike(kw)+"%")
+		q = q.Where("LOWER(title) LIKE ? ESCAPE '\\'", "%"+escapeLike(kw)+"%")
 	}
 	if limit <= 0 {
 		limit = 500
