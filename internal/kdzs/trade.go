@@ -760,7 +760,7 @@ func applyTradeLogistics(item *TradeListItem, trade map[string]any) {
 	if len(list) == 0 {
 		// 兼容偶发单层字段
 		no := asString(trade["trackingNo"], trade["ydNo"], trade["mailNo"], trade["sid"], trade["expressNo"])
-		if no != "" && item.ExpressNo == "" {
+		if no != "" && item.ExpressNo == "" && !tradeGoodsAllExcluded(item) {
 			item.ExpressNo = no
 			item.ExpressCompany = asString(trade["companyName"], trade["logisticsCompanyName"], trade["kdName"], trade["expressName"])
 			item.ExpressCode = asString(trade["company"], trade["sidCode"], trade["kdCode"], trade["cpCode"])
@@ -788,19 +788,61 @@ func applyTradeLogistics(item *TradeListItem, trade map[string]any) {
 		return
 	}
 	item.Logistics = out
-	primary := out[0]
-	if item.ExpressNo == "" {
-		item.ExpressNo = primary.TrackingNo
+	// 本包商品已全部退款/取消时，不把同主单共享的 logisticsInfoList 写成「本包主单号」
+	// （否则运单会错挂到退款行，挤占真实发货包裹的 mail_no）
+	if tradeGoodsAllExcluded(item) {
+		return
 	}
-	if item.ExpressCompany == "" {
-		item.ExpressCompany = firstNonEmpty(primary.CompanyName, primary.Company)
-	}
-	if item.ExpressCode == "" {
-		item.ExpressCode = primary.Company
-	}
+	// 多运单时不要固定取第一条：优先匹配 consignTime/发货时间，否则取最晚发货的一单
+	primary := pickPrimaryLogistics(out, item.ShippedAt)
+	// 多包裹同主单常带回全部 logisticsInfoList；主单号应对齐本包真实发货单
+	item.ExpressNo = primary.TrackingNo
+	item.ExpressCompany = firstNonEmpty(primary.CompanyName, primary.Company)
+	item.ExpressCode = primary.Company
 	if item.ShippedAt == "" {
 		item.ShippedAt = primary.ShipTime
 	}
+}
+
+func tradeGoodsAllExcluded(item *TradeListItem) bool {
+	if item == nil || len(item.Goods) == 0 {
+		return false
+	}
+	for _, g := range item.Goods {
+		if !GoodsLineExcludedFromFulfillment(g) {
+			return false
+		}
+	}
+	return true
+}
+
+func pickPrimaryLogistics(list []TradeLogistics, shippedAt string) TradeLogistics {
+	if len(list) == 0 {
+		return TradeLogistics{}
+	}
+	shippedAt = strings.TrimSpace(shippedAt)
+	if shippedAt != "" {
+		for _, lg := range list {
+			st := strings.TrimSpace(lg.ShipTime)
+			if st == "" {
+				continue
+			}
+			if st == shippedAt || strings.HasPrefix(shippedAt, st) || strings.HasPrefix(st, shippedAt) {
+				return lg
+			}
+			// 日期+小时分钟一致（偶发秒差）
+			if len(st) >= 16 && len(shippedAt) >= 16 && st[:16] == shippedAt[:16] {
+				return lg
+			}
+		}
+	}
+	latest := list[0]
+	for i := 1; i < len(list); i++ {
+		if strings.TrimSpace(list[i].ShipTime) > strings.TrimSpace(latest.ShipTime) {
+			latest = list[i]
+		}
+	}
+	return latest
 }
 
 func formatLogisticsShipTime(v any) string {
